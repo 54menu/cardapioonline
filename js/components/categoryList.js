@@ -15,13 +15,13 @@ function renderCategoryNav(container, onSearch) {
       if (later.length) {
         const sel = container.querySelector('#sizeFilterSelect');
         if (sel) {
-          sel.innerHTML = '<option value="">Todos os tamanhos</option>' + later.sort((a,b)=>(a.display_order||0)-(b.display_order||0)).map(s=>`<option value="${s.id}">${s.name.split('(')[0].trim()}</option>`).join('');
+          sel.innerHTML = window.safeHTML('<option value="">Todos os tamanhos</option>' + later.sort((a,b)=>(a.display_order||0)-(b.display_order||0)).map(s=>`<option value="${s.id}">${s.name.split('(')[0].trim()}</option>`).join(''));
         }
       }
     }, 600);
   }
 
-  container.innerHTML = `
+  container.innerHTML = window.safeHTML(`
     <div class="sticky-nav-container">
       <div class="container">
         <div class="search-box">
@@ -58,7 +58,7 @@ function renderCategoryNav(container, onSearch) {
         </nav>
       </div>
     </div>
-  `;
+  `);
 
   let priceActive = false;
   function emitFilter(){

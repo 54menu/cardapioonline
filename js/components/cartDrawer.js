@@ -15,7 +15,7 @@ function setupCartDrawer(onProceedToCheckout) {
 
     if (count > 0) {
       floatingBar.classList.add('visible');
-      floatingBar.innerHTML = `
+      floatingBar.innerHTML = window.safeHTML(`
         <button class="floating-cart-btn" id="btnOpenCart">
           <div style="display: flex; align-items: center; gap: 0.6rem;">
             <span class="cart-badge-count">${count} ${count === 1 ? 'item' : 'itens'}</span>
@@ -23,7 +23,7 @@ function setupCartDrawer(onProceedToCheckout) {
           </div>
           <span style="font-size: 1.1rem; font-weight: 800;">${cs ? cs.formatCurrency(total) : 'R$ ' + total}</span>
         </button>
-      `;
+      `);
 
       const btnOpen = floatingBar.querySelector('#btnOpenCart');
       if (btnOpen) btnOpen.addEventListener('click', openDrawer);
@@ -62,7 +62,7 @@ function setupCartDrawer(onProceedToCheckout) {
     const hasFractionalError = !fractionalCheck.valid;
 
     if (items.length === 0) {
-      cartDrawerContent.innerHTML = `
+      cartDrawerContent.innerHTML = window.safeHTML(`
         <div class="modal-header">
           <div class="modal-title">Sua Sacola</div>
           <button class="modal-close-btn" id="btnCloseCart">✕</button>
@@ -73,14 +73,14 @@ function setupCartDrawer(onProceedToCheckout) {
           <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">Adicione deliciosas pizzas e bebidas do cardápio para continuar.</p>
           <button class="btn btn-secondary" id="btnBackToMenu">Ver Cardápio</button>
         </div>
-      `;
+      `);
 
       cartDrawerContent.querySelector('#btnCloseCart')?.addEventListener('click', closeDrawer);
       cartDrawerContent.querySelector('#btnBackToMenu')?.addEventListener('click', closeDrawer);
       return;
     }
 
-    cartDrawerContent.innerHTML = `
+    cartDrawerContent.innerHTML = window.safeHTML(`
       <div class="modal-header">
         <div class="modal-title">Sua Sacola (${window.appState.getItemCount()} ${window.appState.getItemCount() === 1 ? 'item' : 'itens'})</div>
         <button class="modal-close-btn" id="btnCloseCart">✕</button>
@@ -226,7 +226,7 @@ function setupCartDrawer(onProceedToCheckout) {
           <span>${cs ? cs.formatCurrency(total) : 'R$ ' + total} →</span>
         </button>
       </div>
-    `;
+    `);
 
     bindCartEvents();
   }

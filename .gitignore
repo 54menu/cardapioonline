@@ -1,5 +1,7 @@
 node_modules/
-package-lock.json
 *.log
 .DS_Store
 Thumbs.db
+.audit-remote/
+supabase/.temp/
+dist/

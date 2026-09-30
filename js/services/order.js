@@ -4,20 +4,8 @@
  */
 
 const orderService = {
-  // Gera identificador sequencial (evita NaN quando storage é assíncrono)
-  generateOrderNumber() {
-    try {
-      const existing = window.storage?.getOrders();
-      if (Array.isArray(existing)) return '#' + (1040 + existing.length + 1);
-      // storage assíncrono (Supabase) -> usa contador local
-      const local = JSON.parse(localStorage.getItem('cardapio_orders') || '[]');
-      if (Array.isArray(local) && local.length) return '#' + (1040 + local.length + 1);
-    } catch {}
-    return '#' + Date.now().toString().slice(-6);
-  },
-
   // Cria um snapshot completo e congelado do pedido
-  createOrderSnapshot({ customer, address, paymentMethod, cashChange, notes }) {
+  async createOrderSnapshot({ customer, address, paymentMethod, cashChange, notes }) {
     const store = window.appState.store;
     const items = window.appState.cart.items;
     const orderType = window.appState.cart.orderType;
@@ -25,12 +13,15 @@ const orderService = {
     const deliveryFee = window.appState.getDeliveryFee();
     const total = window.appState.getTotal();
 
-    const orderNumber = this.generateOrderNumber();
+    const orderNumber = null;
     const orderId = 'ord_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
 
     // Congela itens com nomes e preços exatos no momento da compra (Módulo 06) — inclui ofertas
     const itemsSnapshot = items.map(item => ({
       productId: item.productId,
+      size: item.size || null,
+      flavorIds: item.flavorIds || [],
+      fractionValue: item.fractionValue ?? 1,
       productName: item.productName,
       productCodigo: item.originalProduct?.codigo || item.codigo || null,
       unitPrice: Number(item.unitPrice),
@@ -45,8 +36,16 @@ const orderService = {
       itemTotal: Number(item.itemTotal)
     }));
 
+    const fingerprint=JSON.stringify([itemsSnapshot,customer,address,paymentMethod,cashChange,notes,window.appState.cart.neighborhood?.id]);
+    if(window.appState.checkoutFingerprint!==fingerprint){
+      window.appState.checkoutRequestId=crypto.randomUUID();
+      window.appState.checkoutFingerprint=fingerprint;
+    }
+
     const orderSnapshot = {
       id: orderId,
+      requestId: window.appState.checkoutRequestId || (window.appState.checkoutRequestId=crypto.randomUUID()),
+      neighborhoodId: window.appState.cart.neighborhood?.id || null,
       orderNumber,
       storeId: store.id,
       storeName: store.name,
@@ -79,9 +78,9 @@ const orderService = {
     };
 
     // Salva no histórico de pedidos
-    window.storage?.saveOrder(orderSnapshot);
+    const saved=await window.storage.saveOrder(orderSnapshot);
 
-    return orderSnapshot;
+    return saved;
   },
 
   // Histórico de pedidos

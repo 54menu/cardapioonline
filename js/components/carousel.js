@@ -23,7 +23,7 @@ function renderCarousel(container, onSelectProduct){
   if (!container) return;
   const items = getCarouselProducts();
   if (!items.length){
-    container.innerHTML = '';
+    container.innerHTML = window.safeHTML('');
     container.style.display = 'none';
     return;
   }
@@ -31,7 +31,7 @@ function renderCarousel(container, onSelectProduct){
 
   const cs = window.customerService;
 
-  container.innerHTML = `
+  container.innerHTML = window.safeHTML(`
     <section class="carousel-section">
       <div class="carousel-header">
         <h2 class="carousel-title">⭐ Promoções em Destaque</h2>
@@ -62,13 +62,13 @@ function renderCarousel(container, onSelectProduct){
         </div>
       </div>
     </section>
-  `;
+  `);
 
   // Dots
   const track = container.querySelector('#carouselTrack');
   const dotsWrap = container.querySelector('#carouselDots');
   if (dotsWrap && track){
-    dotsWrap.innerHTML = items.map((_,i)=> `<span class="carousel-dot ${i===0?'active':''}" data-index="${i}"></span>`).join('');
+    dotsWrap.innerHTML = window.safeHTML(items.map((_,i)=> `<span class="carousel-dot ${i===0?'active':''}" data-index="${i}"></span>`).join(''));
     const dots = dotsWrap.querySelectorAll('.carousel-dot');
     const cards = track.querySelectorAll('.carousel-card');
 

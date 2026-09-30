@@ -3,50 +3,7 @@
  * Compatível com file:// e http://
  */
 
-function isStoreOpenNowHeader(schedule, fallbackStatus){
-  if(!schedule || !Object.keys(schedule).length) return fallbackStatus==='open';
-  const WEEK_DAYS_KEYS = ['seg','ter','qua','qui','sex','sab','dom'];
-  const hasAnyDay = WEEK_DAYS_KEYS.some(k=> {
-    const v=schedule[k];
-    if(!v) return false;
-    if(v.closed===true) return false;
-    return !!(v.open || v.close || v.open2 || v.close2);
-  });
-  const hasWeekdayKeys = WEEK_DAYS_KEYS.some(k=> schedule[k] !== undefined);
-  if(!hasAnyDay){
-    if(hasWeekdayKeys) return false;
-    return fallbackStatus==='open';
-  }
-  const map={0:'dom',1:'seg',2:'ter',3:'qua',4:'qui',5:'sex',6:'sab'};
-  const now=new Date(); const key=map[now.getDay()]; const day=schedule[key];
-  if(!day) return false;
-  if(day.closed===true) return false;
-  if(day.closed===false && day.open && day.close && !schedule.hasLunchClosure){
-    const [oh,om]=(day.open||'00:00').split(':').map(Number);
-    const [ch,cm]=(day.close||'23:59').split(':').map(Number);
-    const cur=now.getHours()*60+now.getMinutes(); const open=oh*60+om, close=ch*60+cm;
-    if(close<open) return cur>=open || cur<=close;
-    return cur>=open && cur<=close;
-  }
-  const cur=now.getHours()*60+now.getMinutes();
-  function inInterval(openStr, closeStr){
-    if(!openStr || !closeStr) return false;
-    const [oh,om]= openStr.split(':').map(Number);
-    const [ch,cm]= closeStr.split(':').map(Number);
-    if(Number.isNaN(oh)||Number.isNaN(om)||Number.isNaN(ch)||Number.isNaN(cm)) return false;
-    const open=oh*60+om, close=ch*60+cm;
-    if(close<open) return cur>=open || cur<=close;
-    return cur>=open && cur<=close;
-  }
-  const hasLunch = !!schedule.hasLunchClosure;
-  if(hasLunch){
-    if(inInterval(day.open, day.close)) return true;
-    if(inInterval(day.open2, day.close2)) return true;
-    return false;
-  } else {
-    return inInterval(day.open, day.close);
-  }
-}
+function isStoreOpenNowHeader(schedule,status){ return window.storeOpenNow(schedule,status); }
 function renderHeader(container) {
   const store = window.appState.store;
   const customer = window.appState.customer;
@@ -74,7 +31,7 @@ function renderHeader(container) {
   const coverUrl = store.cover || store.cover_url || '';
   const logoUrl = store.logo || store.logo_url || '';
   const observations = (store.description || store.observations || '').trim();
-  container.innerHTML = `
+  container.innerHTML = window.safeHTML(`
     <header class="store-header">
       <div class="store-cover" style="background-image: linear-gradient(180deg, rgba(14, 17, 23, 0.2) 0%, rgba(14, 17, 23, 0.85) 100%), url('${coverUrl}')"></div>
       
@@ -113,7 +70,7 @@ function renderHeader(container) {
         </div>
       </div>
     </header>
-  `;
+  `);
 
   // Bind repeat last order button
   const btnRepeat = container.querySelector('#btnRepeatLastOrder');

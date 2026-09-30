@@ -1,0 +1,12 @@
+project_id = "cardapioonline"
+
+[functions.generate-pix]
+# Authentication is verified online with auth.getUser(), followed by ownership checks.
+# This works with both legacy and asymmetric Supabase signing keys.
+verify_jwt = false
+
+[functions.webhook-mercadopago]
+verify_jwt = false
+
+[functions.create-order]
+verify_jwt = false

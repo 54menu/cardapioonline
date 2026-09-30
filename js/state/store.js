@@ -73,7 +73,7 @@ class StoreState {
     
     // Tenta pegar dados do cache local primeiro
     try {
-      if (storageEngine.localCache || storageEngine.useLocalFallback) {
+      if (storageEngine.useLocalFallback) {
         this.store = storageEngine.getStore();
         this.categories = storageEngine.getCategories();
         this.products = storageEngine.getProducts();
@@ -368,6 +368,7 @@ class StoreState {
 
   // --- Carrinho: Ações ---
   addItem(itemPayload) {
+    this.checkoutRequestId=null;
     const {
       product,
       size = null,
@@ -411,8 +412,8 @@ class StoreState {
         fraction: { label, numerator: fraction.numerator||1, denominator: fraction.denominator||2 },
         fractionValue: fv,
         fractionLabel: label,
-        crust: crust ? { name: crust.name, price: Number(crust.price || 0) } : null,
-        extras: extras.map(e => ({ name: e.name, price: Number(e.price || 0) })),
+        crust: crust ? { id: crust.id, name: crust.name, price: Number(crust.price || 0) } : null,
+        extras: extras.map(e => ({ id: e.id, name: e.name, price: Number(e.price || 0) })),
         observation: observation.trim(),
         itemTotal: unitPrice * quantity * fv // temporário proporcional para exibição; subtotal real é recalc via _computeFractionalSubtotal
       };
@@ -474,15 +475,16 @@ class StoreState {
       productId: product.id,
       productName: displayName,
       originalProduct: { id: product.id, name: product.name, price: Number(product.price), codigo: product.codigo || null },
+      flavorIds: allFlavors.map(f=>f.id),
       secondFlavor: secondFlavor ? { id: secondFlavor.id, name: secondFlavor.name, price: Number(secondFlavor.price) } : null,
-      size: size ? { name: size.name, price_diff: Number(size.price_diff || 0) } : null,
+      size: size ? { id: size.id, name: size.name, price_diff: Number(size.price_diff || 0) } : null,
       basePrice,
       unitPrice,
       quantity,
       fractionValue: 1,
       fractionLabel: 'Inteira',
-      crust: crust ? { name: crust.name, price: Number(crust.price || 0) } : null,
-      extras: extras.map(e => ({ name: e.name, price: Number(e.price || 0) })),
+      crust: crust ? { id: crust.id, name: crust.name, price: Number(crust.price || 0) } : null,
+      extras: extras.map(e => ({ id: e.id, name: e.name, price: Number(e.price || 0) })),
       observation: observation.trim(),
       itemTotal
     };
@@ -493,6 +495,7 @@ class StoreState {
   }
 
   updateQuantity(itemId, delta) {
+    this.checkoutRequestId=null;
     const itemIndex = this.cart.items.findIndex(item => item.id === itemId);
     if (itemIndex === -1) return;
 
@@ -517,17 +520,20 @@ class StoreState {
   }
 
   removeItem(itemId) {
+    this.checkoutRequestId=null;
     this.cart.items = this.cart.items.filter(item => item.id !== itemId);
     this.notify();
   }
 
   clearCart() {
+    this.checkoutRequestId=null;
     this.cart.items = [];
     this.cart.cashChange = '';
     this.notify();
   }
 
   reorder(previousItems) {
+    this.checkoutRequestId=null;
     if (!previousItems || !Array.isArray(previousItems)) return;
     this.cart.items = previousItems.map(item => ({
       ...item,
@@ -591,8 +597,8 @@ class StoreState {
     if (this.cart.orderType === 'pickup') return 0;
     const nbs = this.store?.neighborhoods || (window.storage?.getNeighborhoods?.() || []);
     // Regra: mostra seletor e cobra por bairro apenas se >1 bairro cadastrado; senão taxa padrão
-    if (nbs.length > 1 && this.cart.neighborhood && typeof this.cart.neighborhood.fee === 'number') {
-      return Number(this.cart.neighborhood.fee);
+    if (nbs.length > 1 && this.cart.neighborhood && this.cart.neighborhood.delivery_fee != null) {
+      return Number(this.cart.neighborhood.delivery_fee);
     }
     return Number(this.store?.default_delivery_fee || 0);
   }

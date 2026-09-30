@@ -22,7 +22,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   try {
     // 2. Busca loja por slug no Supabase
-    const { storeApi } = await import('./lib/supabase.js?v=12');
+    const { storeApi } = await import('./lib/supabase.js?v=20260930');
     const { data: store, error } = await storeApi.getBySlug(slug);
     
     if (error || !store) {
@@ -30,7 +30,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // 3. Inicializa storage com store_id
-    const { storage } = await import('./state/storage-supabase.js?v=12');
+    const { storage } = await import('./state/storage-supabase.js?v=20260930');
     await storage.init(store.id);
     // Garante que appState leia o cache recém-carregado
     if (window.appState) {
@@ -44,14 +44,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 4. Checa assinatura (trial até próximo 01, bloqueio dia 06 se pending)
     try {
-      const { subscriptionsApi } = await import('./lib/supabase.js?v=16');
-      const { data: sub } = await subscriptionsApi.get(store.id);
-      if (sub && (sub.status === 'blocked' || sub.status === 'past_due')) {
+      const { subscriptionsApi } = await import('./lib/supabase.js?v=20260930');
+      const { data: status, error: statusError } = await window.supabase.rpc('public_store_status', {p_store_id:store.id});
+      if(statusError) throw statusError;
+      const sub={status};
+      if (sub && (sub.status === 'blocked' || sub.status === 'past_due' || sub.status === 'canceled')) {
         const due = sub.current_period_end ? new Date(sub.current_period_end+'T12:00:00').toLocaleDateString('pt-BR') : '';
         const msg = sub.status === 'blocked'
           ? `<h1>🚫 Loja temporariamente indisponível</h1><p>Assinatura vencida em ${due}. O lojista regulariza o PIX dia 01 (vence dia 06).</p>`
           : `<h1>⏳ Aguardando pagamento</h1><p>Vencimento dia 01 — carência até dia 06. PIX pendente.</p>`;
-        document.getElementById('menuContainer').innerHTML = `<div class="store-closed">${msg}<p style="font-size:0.85rem; margin-top:1rem;">Entre em contato com a loja.</p></div>`;
+        document.getElementById('menuContainer').innerHTML = window.safeHTML(`<div class="store-closed">${msg}<p style="font-size:0.85rem; margin-top:1rem;">Entre em contato com a loja.</p></div>`);
         document.getElementById('floatingCartBar').style.display='none';
         loadingScreen.classList.add('hidden');
         return;
@@ -71,50 +73,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 5. Verifica se loja está aberta (considera horário por dia) — não trava a página, apenas informa status no header
     const _settings = storage.getSettings ? storage.getSettings() : {};
     const _schedule = _settings?.schedule;
-    const _isOpen = (()=>{
-      if(!_schedule || !Object.keys(_schedule).length) return store.status==='open';
-      const WEEK_DAYS_KEYS = ['seg','ter','qua','qui','sex','sab','dom'];
-      const hasAnyDay = WEEK_DAYS_KEYS.some(k=> {
-        const v=_schedule[k];
-        if(!v) return false;
-        if(v.closed===true) return false;
-        return !!(v.open || v.close || v.open2 || v.close2);
-      });
-      const hasWeekdayKeys = WEEK_DAYS_KEYS.some(k=> _schedule[k] !== undefined);
-      if(!hasAnyDay){
-        if(hasWeekdayKeys) return false;
-        return store.status==='open';
-      }
-      const map={0:'dom',1:'seg',2:'ter',3:'qua',4:'qui',5:'sex',6:'sab'};
-      const now=new Date(); const key=map[now.getDay()]; const day=_schedule[key];
-      if(!day) return false;
-      if(day.closed===true) return false;
-      if(day.closed===false && day.open && day.close && !_schedule.hasLunchClosure){
-        const [oh,om]=(day.open||'00:00').split(':').map(Number);
-        const [ch,cm]=(day.close||'23:59').split(':').map(Number);
-        const cur=now.getHours()*60+now.getMinutes(); const open=oh*60+om, close=ch*60+cm;
-        if(close<open) return cur>=open || cur<=close;
-        return cur>=open && cur<=close;
-      }
-      const cur=now.getHours()*60+now.getMinutes();
-      function inInterval(openStr, closeStr){
-        if(!openStr || !closeStr) return false;
-        const [oh,om]= openStr.split(':').map(Number);
-        const [ch,cm]= closeStr.split(':').map(Number);
-        if(Number.isNaN(oh)||Number.isNaN(om)||Number.isNaN(ch)||Number.isNaN(cm)) return false;
-        const open=oh*60+om, close=ch*60+cm;
-        if(close<open) return cur>=open || cur<=close;
-        return cur>=open && cur<=close;
-      }
-      const hasLunch = !!_schedule.hasLunchClosure;
-      if(hasLunch){
-        if(inInterval(day.open, day.close)) return true;
-        if(inInterval(day.open2, day.close2)) return true;
-        return false;
-      } else {
-        return inInterval(day.open, day.close);
-      }
-    })();
+    const _isOpen = window.storeOpenNow(_schedule,store.status);
     window._storeIsOpen = _isOpen;
     if (!_isOpen) console.info('Loja fechada — página mantida com badge "Fechado" no header (app-supabase.js:53). Cliente ainda pode navegar e montar sacola para agendamento.');
 
@@ -192,18 +151,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 function showStoreNotFound() {
   const menuContainer = document.getElementById('menuContainer');
-  menuContainer.innerHTML = `
+  menuContainer.innerHTML = window.safeHTML(`
     <div class="store-closed">
       <h1>🔍 Loja não encontrada</h1>
       <p>O link acessado não corresponde a nenhuma pizzaria ativa.</p>
       <p style="font-size: 0.85rem; margin-top: 1rem;">Verifique o URL ou entre em contato com o estabelecimento.</p>
     </div>
-  `;
+  `);
 }
 
 function showStoreClosed(store) {
   const menuContainer = document.getElementById('menuContainer');
-  menuContainer.innerHTML = `
+  menuContainer.innerHTML = window.safeHTML(`
     <div class="store-closed">
       <h1>🏪 ${store.name}</h1>
       <p style="font-size: 1.2rem; color: var(--status-closed); font-weight: 700; margin-bottom: 1rem;">
@@ -214,20 +173,21 @@ function showStoreClosed(store) {
         Volte durante o horário de atendimento para fazer seu pedido.
       </p>
     </div>
-  `;
+  `);
 }
 
 function showError(message) {
   const menuContainer = document.getElementById('menuContainer');
-  menuContainer.innerHTML = `
+  menuContainer.innerHTML = window.safeHTML(`
     <div class="store-closed">
       <h1>⚠️ Erro ao carregar</h1>
       <p>${message}</p>
-      <button onclick="location.reload()" class="btn btn-primary" style="margin-top: 1rem;">
+      <button id="reloadMenu" class="btn btn-primary" style="margin-top: 1rem;">
         Tentar novamente
       </button>
     </div>
-  `;
+  `);
+  menuContainer.querySelector('#reloadMenu')?.addEventListener('click',()=>location.reload());
 }
 
 function showToast(message, type = 'info') {

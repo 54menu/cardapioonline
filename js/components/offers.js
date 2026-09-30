@@ -23,11 +23,11 @@ function renderOffersSection(container){
   const offers = getActiveOffersForDisplay();
   if(!offers.length){
     container.style.display='none';
-    container.innerHTML='';
+    container.innerHTML=window.safeHTML('');
     return;
   }
   container.style.display='block';
-  container.innerHTML = `
+  container.innerHTML = window.safeHTML(`
     <div style="margin-bottom:1.25rem;">
       <h2 style="font-size:1.15rem; font-weight:800; margin-bottom:0.6rem; display:flex; align-items:center; gap:0.4rem;">🎁 Promoções e Combos</h2>
       <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(260px,1fr)); gap:0.75rem;">
@@ -58,7 +58,7 @@ function renderOffersSection(container){
         }).join('')}
       </div>
     </div>
-  `;
+  `);
   container.querySelectorAll('.btn-open-offer, .product-card[data-offer-id]').forEach(el=>{
     el.addEventListener('click', (e)=>{
       e.stopPropagation();
@@ -82,7 +82,7 @@ function openOfferSelectionModal(offerId){
     backdrop = document.createElement('div');
     backdrop.id='offerSelectionBackdrop';
     backdrop.className='modal-backdrop';
-    backdrop.innerHTML=`<div id="offerSelectionContent" class="modal-sheet" style="max-width:620px; max-height:90vh; overflow:auto;"></div>`;
+    backdrop.innerHTML=window.safeHTML(`<div id="offerSelectionContent" class="modal-sheet" style="max-width:620px; max-height:90vh; overflow:auto;"></div>`);
     document.body.appendChild(backdrop);
     backdrop.addEventListener('click', (e)=>{ if(e.target===backdrop) closeOfferSelectionModal(); });
   }
@@ -151,7 +151,7 @@ function openOfferSelectionModal(offerId){
     }).join('');
 
     const finalPrice = Number(offer.price||0) + totalExtra;
-    content.innerHTML=`
+    content.innerHTML=window.safeHTML(`
       <div class="modal-header">
         <div class="modal-title">🎁 ${offer.name} — ${formatCurrencyOffer(offer.price)}${totalExtra>0?` + ${formatCurrencyOffer(totalExtra)} extras`:''} = <span style="color:var(--primary);">${formatCurrencyOffer(finalPrice)}</span></div>
         <button class="modal-close-btn" id="btnCloseOfferSelection">✕</button>
@@ -167,7 +167,7 @@ function openOfferSelectionModal(offerId){
         <button class="btn btn-secondary" id="btnCancelOfferSelection">Cancelar</button>
         <button class="btn btn-primary" id="btnAddOfferToCart" ${allValid?'':'disabled style="opacity:0.5; pointer-events:none;"'}>Adicionar por ${formatCurrencyOffer(finalPrice)} →</button>
       </div>
-    `;
+    `);
     content.querySelector('#btnCloseOfferSelection')?.addEventListener('click', closeOfferSelectionModal);
     content.querySelector('#btnCancelOfferSelection')?.addEventListener('click', closeOfferSelectionModal);
     content.querySelector('#btnAddOfferToCart')?.addEventListener('click', ()=>{

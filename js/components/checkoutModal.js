@@ -28,7 +28,7 @@ function setupCheckoutModal() {
     const savedAddresses = profile.addresses || [];
     const defaultAddr = savedAddresses.find(a => a.id === profile.default_address_id) || savedAddresses[0] || null;
 
-    checkoutContent.innerHTML = `
+    checkoutContent.innerHTML = window.safeHTML(`
       <div class="modal-header">
         <div class="modal-title">Identificação & Entrega</div>
         <button class="modal-close-btn" id="btnCloseCheckout">✕</button>
@@ -132,7 +132,7 @@ function setupCheckoutModal() {
           <span>(${cs ? cs.formatCurrency(total) : 'R$ ' + total})</span>
         </button>
       </div>
-    `;
+    `);
 
     bindCheckoutEvents(profile, savedAddresses);
   }
@@ -189,7 +189,7 @@ function setupCheckoutModal() {
     }
   }
 
-  function handleOrderSubmission(profile, savedAddresses) {
+  async function handleOrderSubmission(profile, savedAddresses) {
     const cs = window.customerService;
     // Validação fração ½ - pizzas incompletas
     if(window.appState.validateFractionalCart){
@@ -252,13 +252,19 @@ function setupCheckoutModal() {
             neighborhood,
             complement,
             reference,
-            city: 'São Paulo'
+            city: window.appState.store?.settings?.city || ''
           });
         }
       }
     }
 
-    const orderSnapshot = window.orderService.createOrderSnapshot({
+    const submit=checkoutContent.querySelector('#btnSubmitOrderToWhatsApp');
+    if(submit.disabled) return;
+    submit.disabled=true;
+    const pendingWindow=window.open('about:blank','_blank');
+    if(pendingWindow) pendingWindow.opener=null;
+    try {
+    const orderSnapshot = await window.orderService.createOrderSnapshot({
       customer: {
         token: profile.token,
         name,
@@ -270,16 +276,20 @@ function setupCheckoutModal() {
       notes: notesInput ? notesInput.value : ''
     });
 
-    window.whatsappService.openWhatsApp(orderSnapshot);
+    const url=window.whatsappService.generateWhatsAppLink(orderSnapshot);
+    if(pendingWindow) pendingWindow.location.href=url;
+    else window.whatsappService.openWhatsApp(orderSnapshot);
     window.appState.clearCart();
 
     closeCheckout();
     openSuccessModal(orderSnapshot);
+    }catch(error){if(pendingWindow) pendingWindow.close();alert(error.message || 'Pedido não registrado. Tente novamente.');}
+    finally{submit.disabled=false;}
   }
 
   function openSuccessModal(order) {
     const cs = window.customerService;
-    successContent.innerHTML = `
+    successContent.innerHTML = window.safeHTML(`
       <div class="modal-body success-screen">
         <div class="success-icon">✓</div>
         <h2 class="success-title">Pedido Enviado para o WhatsApp!</h2>
@@ -310,7 +320,7 @@ function setupCheckoutModal() {
           </button>
         </div>
       </div>
-    `;
+    `);
 
     successContent.querySelector('#btnReopenWhatsApp')?.addEventListener('click', () => {
       window.whatsappService.openWhatsApp(order);

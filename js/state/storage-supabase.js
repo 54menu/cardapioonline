@@ -4,7 +4,7 @@
  * Compatível com a API anterior (window.storage)
  */
 
-import { supabase, auth, storeApi, categoriesApi, productsApi, addonGroupsApi, neighborhoodsApi, ordersApi, settingsApi, pizzaSizesApi, productSizePricesApi, offersApi, offerGroupsApi, offerGroupItemsApi, offerSchedulesApi, campaignsApi } from '../lib/supabase.js?v=18';
+import { supabase, auth, storeApi, categoriesApi, productsApi, addonGroupsApi, neighborhoodsApi, ordersApi, settingsApi, pizzaSizesApi, productSizePricesApi, offersApi, offerGroupsApi, offerGroupItemsApi, offerSchedulesApi, campaignsApi } from '../lib/supabase.js?v=20260930';
 
 // Normaliza campos Supabase -> formato legado do frontend
 function normalizeProduct(p) {
@@ -45,6 +45,9 @@ class SupabaseStorageEngine {
       campaigns: null
     };
   }
+
+  getItem(key) { const scoped=key+':'+(this.storeId||'local'); try{return localStorage.getItem(scoped);}catch{return this.localCache[scoped]||null;} }
+  setItem(key,value) { const scoped=key+':'+(this.storeId||'local'); try{localStorage.setItem(scoped,value);}catch{this.localCache[scoped]=value;} }
 
   async init(storeId) {
     this.storeId = storeId;
@@ -108,7 +111,7 @@ class SupabaseStorageEngine {
         }
         this._dataCache.addonGroups = mapped;
       }
-      this._dataCache.neighborhoods = neighborhoodsResult.data || [];
+      this._dataCache.neighborhoods = (neighborhoodsResult.data || []).map(n=>({...n,fee:Number(n.delivery_fee)}));
       this._dataCache.settings = settingsResult.data || {};
       this._dataCache.pizzaSizes = pizzaSizesResult?.data || [];
       this._dataCache.productSizePrices = sizePricesResult?.data || [];
@@ -121,9 +124,9 @@ class SupabaseStorageEngine {
       console.log('✅ SupabaseStorageEngine inicializado para store:', storeId);
       this.emitChange('data_ready', this._dataCache);
     } catch (err) {
-      console.warn('⚠️ Falha ao conectar Supabase, usando fallback local:', err.message);
+      console.warn('Não foi possível carregar o catálogo:', err.message);
       this.useLocalFallback = true;
-      return this.initLocalFallback();
+      throw new Error('Não foi possível carregar o cardápio. Atualize a página para tentar novamente.');
     }
   }
 
@@ -135,16 +138,6 @@ class SupabaseStorageEngine {
       PRODUCTS: 'cardapio_products',
       ADDONS: 'cardapio_addon_groups',
       ORDERS: 'cardapio_orders'
-    };
-
-    this.getItem = (key) => {
-      try { return localStorage.getItem(key); }
-      catch { return this.localCache[key] || null; }
-    };
-
-    this.setItem = (key, value) => {
-      try { localStorage.setItem(key, value); }
-      catch { this.localCache[key] = value; }
     };
 
     if (!this.getItem(STORAGE_KEYS.STORE)) {
@@ -305,23 +298,7 @@ class SupabaseStorageEngine {
     if(this.useLocalFallback) return [];
     return this._dataCache.offers || [];
   }
-  getActiveOffers(now=new Date()){
-    const all = this.getOffers();
-    return all.filter(o=>{
-      if(!o.active) return false;
-      if(!o.schedules || !o.schedules.length) return true;
-      const wd = now.getDay();
-      const cur = now.getHours()*60+now.getMinutes();
-      return o.schedules.some(s=>{
-        if(Number(s.weekday)!==wd) return false;
-        const [sh,sm]=String(s.start_time).split(':').map(Number);
-        const [eh,em]=String(s.end_time).split(':').map(Number);
-        const start=sh*60+sm, end=eh*60+em;
-        if(end<start) return cur>=start || cur<=end;
-        return cur>=start && cur<=end;
-      });
-    });
-  }
+  getActiveOffers(now=new Date()) { return this.getOffers().filter(o=>o.active && (!o.schedules?.length || window.scheduleActive(o.schedules,now))); }
   async fetchCampaigns(storeId){
     const sid = storeId || this.storeId;
     if(!sid) return { data: [] };
@@ -371,62 +348,15 @@ class SupabaseStorageEngine {
     return customer;
   }
 
-  async getOrders() {
-    if (this.useLocalFallback) {
-      return JSON.parse(this.getItem('cardapio_orders') || '[]');
-    }
-    try {
-      const { data, error } = await ordersApi.list(this.storeId);
-      if (error) throw error;
-      return data || [];
-    } catch (e) {
-      // Guest não tem permissão para listar - retorna local
-      try { return JSON.parse(this.getItem('cardapio_orders') || '[]'); } catch { return []; }
-    }
-  }
-
+  getOrders() { try{return JSON.parse(this.getItem('cardapio_orders')||'[]');}catch{return [];} }
+  getLastOrder() { return this.getOrders()[0]||null; }
   async saveOrder(order) {
-    if (this.useLocalFallback) {
-      const orders = JSON.parse(this.getItem('cardapio_orders') || '[]');
-      orders.unshift(order);
-      this.setItem('cardapio_orders', JSON.stringify(orders));
-      this.emitChange('order_created', order);
-      return order;
-    }
-    // Mapeia snapshot do orderService para colunas da tabela orders
-    try {
-      const dbOrder = {
-        customer_name: order.customer?.name || order.customer_name || 'Cliente',
-        customer_phone: order.customer?.phone || order.customer_phone || '',
-        customer_email: order.customer?.email || null,
-        customer_address: order.deliveryAddress || order.customer_address || null,
-        order_type: order.orderType || order.order_type || 'delivery',
-        items: order.items || [],
-        subtotal: Number(order.subtotal || 0),
-        delivery_fee: Number(order.deliveryFee || order.delivery_fee || 0),
-        total: Number(order.total || 0),
-        payment_method: order.payment?.method || order.payment_method || 'pix',
-        notes: order.notes || '',
-        status: 'received'
-      };
-      const { data, error } = await ordersApi.create(this.storeId, dbOrder);
-      if (error) throw error;
-      this.emitChange('order_created', data);
-      return data;
-    } catch (e) {
-      console.warn('ordersApi.create falhou, salvando local:', e.message);
-      // Fallback local para não bloquear WhatsApp
-      const orders = JSON.parse(this.getItem('cardapio_orders') || '[]');
-      orders.unshift(order);
-      this.setItem('cardapio_orders', JSON.stringify(orders));
-      this.emitChange('order_created', order);
-      return order;
-    }
-  }
-
-  async getLastOrder() {
-    const orders = await this.getOrders();
-    return orders.length > 0 ? orders[0] : null;
+    if(this.useLocalFallback) throw new Error('Conexão indisponível. Seu pedido não foi enviado.');
+    const {data,error}=await ordersApi.create(this.storeId,order);
+    if(error || !data) throw new Error(error?.message || 'Não foi possível registrar o pedido. Tente novamente.');
+    const orders=this.getOrders();orders.unshift(data);
+    this.setItem('cardapio_orders',JSON.stringify(orders.slice(0,30)));
+    return data;
   }
 
   async resetDefaults() {

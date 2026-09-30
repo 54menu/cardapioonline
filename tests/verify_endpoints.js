@@ -11,10 +11,10 @@ const ENDPOINTS = [
   '/css/main.css',
   '/css/cardapio.css',
   '/css/admin.css',
-  '/js/app.js',
-  '/js/admin.js',
+  '/js/app-supabase.js',
+  '/js/admin-supabase.js',
   '/js/state/store.js',
-  '/js/state/storage.js',
+  '/js/state/storage-supabase.js',
   '/js/mock/initialData.js',
   '/js/services/whatsapp.js',
   '/js/services/customer.js',
@@ -29,7 +29,7 @@ const ENDPOINTS = [
 
 async function checkEndpoint(path) {
   return new Promise((resolve) => {
-    http.get(`http://localhost:3000${path}`, (res) => {
+    http.get(`${process.env.TEST_BASE_URL || 'http://localhost:3000'}${path}`, (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
@@ -52,7 +52,7 @@ async function run() {
 
   for (const ep of ENDPOINTS) {
     const res = await checkEndpoint(ep);
-    const pass = res.status === 200 && res.size > 0;
+    const pass = res.status === 200 && res.size > 0 && res.contentType?.includes(ep.endsWith('.js') ? 'javascript' : ep.endsWith('.css') ? 'text/css' : 'text/html');
     if (!pass) allPass = false;
     console.log(`${pass ? '✅ PASS' : '❌ FAIL'} [${res.status}] ${ep} (${res.contentType}, ${res.size} bytes)`);
   }

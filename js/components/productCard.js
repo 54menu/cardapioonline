@@ -73,13 +73,13 @@ function renderProductSections(container, searchQuery = '', onSelectProduct) {
   }
 
   if (filteredProducts.length === 0) {
-    container.innerHTML = `
+    container.innerHTML = window.safeHTML(`
       <div style="text-align: center; padding: 4rem 1rem; color: var(--text-muted);">
         <div style="font-size: 2.5rem; margin-bottom: 0.75rem;">🔍</div>
         <p style="font-size: 1.1rem; font-weight: 600; color: var(--text-secondary);">Nenhum produto encontrado para "${searchQuery}"</p>
         <p style="font-size: 0.9rem; margin-top: 0.25rem;">Tente buscar por outro termo ou navegue pelas categorias acima.</p>
       </div>
-    `;
+    `);
     return;
   }
 
@@ -119,7 +119,7 @@ function renderProductSections(container, searchQuery = '', onSelectProduct) {
     `;
   }).join('');
 
-  container.innerHTML = sectionsHtml;
+  container.innerHTML = window.safeHTML(sectionsHtml);
 
   // Bind click nos cards de produto
   container.querySelectorAll('.product-card').forEach(card => {

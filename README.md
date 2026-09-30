@@ -1,72 +1,40 @@
-# 🍕 Cardápio Online + WhatsApp (MVP)
+# ZapMenu — Cardápio Online + WhatsApp
 
-Um sistema completo, leve e ultra-rápido de **Cardápio Digital para Pizzarias e Restaurantes com envio direto do pedido formatado para o WhatsApp da loja via links `wa.me`**.
+Cardápio público e painel de gestão para lojas, com Supabase, pedidos enviados pelo cliente ao WhatsApp e cobrança de assinatura por PIX.
 
-Zero atrito para o cliente (sem necessidade de senhas ou cadastros complexos) e gestão completa para a pizzaria.
+## Desenvolvimento
 
----
+Requer Node.js 24.
 
-## ⚡ Como Rodar
-
-O projeto possui um servidor HTTP integrado embutido em Node.js (sem necessidade de dependências externas pesadas):
-
-```bash
-# Iniciar o servidor local
+```sh
+npm ci
 npm start
-# ou
-node server.js
 ```
 
-### Acessos Rápidos no Navegador:
-- **📱 Cardápio Público do Cliente:** [http://localhost:3000/index.html](http://localhost:3000/index.html)
-- **⚙️ Painel de Gestão da Pizzaria (Admin):** [http://localhost:3000/admin.html](http://localhost:3000/admin.html)
+Abra `http://localhost:3000/index.html?store=SLUG_DA_LOJA` ou `http://localhost:3000/admin.html`.
+O ambiente local usa o projeto Supabase configurado em `js/lib/supabase.js`; as operações autenticadas afetam esse projeto. Para desenvolvimento isolado, configure outro projeto Supabase.
 
-Para rodar os testes automatizados:
-```bash
+## Verificação e publicação
+
+```sh
 npm test
+npm run build
 ```
 
----
+Os testes iniciam seu próprio servidor local e verificam endpoints, MIME, WhatsApp, preços, frações, combos, assinatura de webhook, sanitização, horários e integração do modal/checkout. Não criam pedidos nem cobranças em produção.
 
-## 📁 Estrutura do Projeto
+O GitHub Pages publica somente `dist/`, após `npm ci`, testes e build. SQL, relatórios, configurações e testes ficam fora do site. O repositório em si é público: não versionar credenciais ou dados de clientes.
 
-```text
-Cardápios/
-├── index.html                  # Cardápio Público do Cliente
-├── admin.html                  # Painel de Gestão da Pizzaria (Admin)
-├── server.js                   # Servidor HTTP local (zero dependências)
-├── package.json                # Scripts e configurações do projeto
-├── css/
-│   ├── main.css                # Design system base, tipografia, resets e variáveis
-│   ├── cardapio.css            # Estilos do cardápio público, carrinho e modais
-│   └── admin.css               # Estilos do painel de administração
-├── js/
-│   ├── app.js                  # Inicialização e orquestração do cardápio público
-│   ├── admin.js                # Lógica do painel de administração (CRUD)
-│   ├── state/
-│   │   ├── store.js            # Gerenciamento de estado reativo (carrinho, loja, cliente)
-│   │   └── storage.js          # Adaptador de persistência (LocalStorage com In-Memory Fallback)
-│   ├── services/
-│   │   ├── whatsapp.js         # Formatador de Markdown do WhatsApp e construtor wa.me
-│   │   ├── customer.js         # Identificação sem senha e gestão de endereços
-│   │   └── order.js            # Snapshot imutável de itens, preços e histórico
-│   ├── components/
-│   │   ├── header.js           # Cabeçalho da loja, status Aberto/Fechado e boas-vindas
-│   │   ├── categoryList.js     # Barra de categorias com rolagem e busca em tempo real
-│   │   ├── productCard.js      # Grade de produtos por categoria
-│   │   ├── productModal.js     # Modal de personalização (bordas, adicionais e observações)
-│   │   ├── cartDrawer.js       # Gaveta da sacola, forma de pagamento e taxas
-│   │   └── checkoutModal.js    # Identificação rápida, endereço e envio para o WhatsApp
-│   └── mock/
-│       └── initialData.js      # Dados iniciais realistas (Pizzaria Bella Massa)
-└── tests/
-    ├── verify_endpoints.js     # Teste automatizado de status 200 e MIME types
-    └── verify_whatsapp_logic.js# Teste unitário do gerador de mensagem do WhatsApp
-```
+## Estrutura
 
----
+- `index.html`, `js/app-supabase.js`: cardápio público.
+- `admin.html`, `js/admin-supabase.js`: painel de gestão.
+- `js/components/`, `js/state/`, `js/services/`: apresentação, estado e pedido/WhatsApp.
+- `js/vendor/`: DOMPurify distribuído localmente, com sua licença.
+- `supabase/functions/`: geração de PIX, webhook e criação de pedidos com preços do servidor.
+- `supabase/migrations/`: correções versionadas do banco.
+- `tests/`: testes locais e validação SQL transacional.
 
-## 🛠️ Tecnologias
-- **Frontend:** HTML5 semântico, CSS3 Moderno (Custom Properties, Glassmorphism, CSS Grid/Flexbox), Vanilla JavaScript (ES Modules nativos).
-- **Backend:** Node.js HTTP Server nativo (pronto para exportação estática na Vercel/Cloudflare ou conexão com Supabase).
-- **Integração WhatsApp:** Protocolo padrão `https://wa.me/PHONE?text=MENSAGEM`.
+Consulte [supabase/README.md](supabase/README.md) antes de modificar o banco, publicar funções ou configurar a renovação.
+
+Abrir o WhatsApp não envia a mensagem automaticamente: o cliente confirma o envio no aplicativo. O pedido só sai do checkout após a confirmação de gravação no servidor.

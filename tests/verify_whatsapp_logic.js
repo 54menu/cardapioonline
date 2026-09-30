@@ -2,8 +2,10 @@
  * Teste unitário da formatação da mensagem WhatsApp e do cálculo do pedido
  */
 
-import { whatsappService } from '../js/services/whatsapp.js';
-import { customerService } from '../js/services/customer.js';
+globalThis.window={};
+await import('../js/services/customer.js');
+await import('../js/services/whatsapp.js');
+const {whatsappService}=window;
 
 function testWhatsAppFormatting() {
   console.log('🧪 Testando Formatação da Mensagem WhatsApp (Módulo 07)...\n');

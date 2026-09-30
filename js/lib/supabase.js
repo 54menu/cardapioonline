@@ -3,7 +3,7 @@
  * Compatível com index.html e admin.html via <script type="module">
  */
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
 
 const SUPABASE_URL = 'https://lgeeaolymwtauasppkla.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxnZWVhb2x5bXd0YXVhc3Bwa2xhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2NzQwMzcsImV4cCI6MjEwMzI1MDAzN30.RvHH6DELKFeDmM0GTemGX49u-xaBPejePm2QhXxtb6Y';
@@ -94,7 +94,7 @@ export const storeApi = {
       .from('stores')
       .select('*')
       .eq('slug', slug)
-      .eq('status', 'open')
+      .in('status', ['open', 'closed'])
       .single();
     return { data, error };
   },
@@ -364,13 +364,12 @@ export const neighborhoodsApi = {
 // Pedidos
 export const ordersApi = {
   async create(storeId, order) {
-    const orderNumber = await this.generateOrderNumber(storeId);
-    const { data, error } = await supabase
-      .from('orders')
-      .insert([{ ...order, store_id: storeId, order_number: orderNumber }])
-      .select()
-      .single();
-    return { data, error };
+    const {data,error}=await supabase.functions.invoke('create-order',{body:{store_id:storeId,request_id:order.requestId,order}});
+    if(error){
+      const detail=await error.context?.json?.().catch(()=>null);
+      return {data:null,error:new Error(detail?.error || 'Não foi possível registrar o pedido. Tente novamente.')};
+    }
+    return {data:data?.order,error:data?.error ? new Error(data.error) : null};
   },
 
   async list(storeId, filters = {}) {
@@ -400,17 +399,6 @@ export const ordersApi = {
       .select()
       .single();
     return { data, error };
-  },
-
-  async generateOrderNumber(storeId) {
-    const today = new Date().toISOString().split('T')[0].replace(/-/g, '');
-    const { count } = await supabase
-      .from('orders')
-      .select('*', { count: 'exact', head: true })
-      .eq('store_id', storeId)
-      .gte('created_at', today + 'T00:00:00Z');
-    
-    return `PDV-${today}${(count + 1).toString().padStart(3, '0')}`;
   },
 
   // Realtime subscription para novos pedidos
@@ -684,14 +672,9 @@ export const subscriptionsApi = {
     return { data, error };
   },
   async ensure(storeId){
-    const { data: rpcData, error: rpcErr } = await supabase.rpc('ensure_subscription', { p_store_id: storeId });
-    if(!rpcErr) return this.get(storeId);
-    // fallback sem RPC: cria trial manual até próximo dia 01
-    const { data: existing } = await this.get(storeId);
-    if(existing) return { data: existing, error: null };
-    const due = nextDueDateStr(new Date());
-    const { data: insData, error: insErr } = await supabase.from('subscriptions').insert([{ store_id: storeId, plan_amount: 29.00, status: 'trial', current_period_start: new Date().toISOString().slice(0,10), current_period_end: due, trial_ends_at: due }]).select().single();
-    return { data: insData, error: insErr };
+    const {error}=await supabase.rpc('ensure_subscription',{p_store_id:storeId});
+    if(error) return {data:null,error};
+    return this.get(storeId);
   },
   async listPayments(storeId, limit=12){
     const { data, error } = await supabase.from('payments').select('*').eq('store_id', storeId).order('due_date', {ascending:false}).limit(limit);

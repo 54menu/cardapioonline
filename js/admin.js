@@ -67,18 +67,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // Live preview for URL inputs
     document.getElementById('storeLogoInput').addEventListener('input', (e) => {
       if (e.target.value) showPreview('storeLogoPreview', e.target.value);
-      else document.getElementById('storeLogoPreview').innerHTML = '';
+      else document.getElementById('storeLogoPreview').innerHTML = window.safeHTML('');
     });
     document.getElementById('storeCoverInput').addEventListener('input', (e) => {
       if (e.target.value) showPreview('storeCoverPreview', e.target.value);
-      else document.getElementById('storeCoverPreview').innerHTML = '';
+      else document.getElementById('storeCoverPreview').innerHTML = window.safeHTML('');
     });
   }
 
   function showPreview(containerId, imageUrl) {
     const container = document.getElementById(containerId);
     if (!container) return;
-    container.innerHTML = `<img src="${imageUrl}" alt="Preview" style="max-width: 180px; max-height: 100px; border-radius: var(--radius-md); border: 1px solid var(--border);" />`;
+    container.innerHTML = window.safeHTML(`<img src="${imageUrl}" alt="Preview" style="max-width: 180px; max-height: 100px; border-radius: var(--radius-md); border: 1px solid var(--border);" />`);
   }
 
   statusInput.addEventListener('change', () => {
@@ -119,11 +119,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const products = storage.getProducts();
 
     if (categories.length === 0) {
-      categoriesContainer.innerHTML = `<p style="color: var(--text-muted); text-align: center; padding: 2rem;">Nenhuma categoria cadastrada.</p>`;
+      categoriesContainer.innerHTML = window.safeHTML(`<p style="color: var(--text-muted); text-align: center; padding: 2rem;">Nenhuma categoria cadastrada.</p>`);
       return;
     }
 
-    categoriesContainer.innerHTML = categories.map(cat => {
+    categoriesContainer.innerHTML = window.safeHTML(categories.map(cat => {
       const count = products.filter(p => p.category_id === cat.id).length;
       return `
         <div class="item-row">
@@ -140,7 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
         </div>
       `;
-    }).join('');
+    }).join(''));
 
     categoriesContainer.querySelectorAll('.btn-edit-cat').forEach(btn => {
       btn.addEventListener('click', () => openCategoryModal(btn.dataset.id));
@@ -221,12 +221,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function updateCategoryDropdowns() {
     const categories = storage.getCategories();
-    
-    filterCatSelect.innerHTML = `<option value="">Todas as Categorias</option>` + 
-      categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+
+    filterCatSelect.innerHTML = window.safeHTML(`<option value="">Todas as Categorias</option>` +
+      categories.map(c => `<option value="${c.id}">${c.name}</option>`).join(''));
 
     const prodCatSelect = document.getElementById('prodCategorySelect');
-    prodCatSelect.innerHTML = categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    prodCatSelect.innerHTML = window.safeHTML(categories.map(c => `<option value="${c.id}">${c.name}</option>`).join(''));
   }
 
   function renderProducts() {
@@ -241,18 +241,18 @@ document.addEventListener('DOMContentLoaded', () => {
       filtered = filtered.filter(p => p.category_id === selectedCat);
     }
     if (searchQuery) {
-      filtered = filtered.filter(p => 
+      filtered = filtered.filter(p =>
         p.name.toLowerCase().includes(searchQuery) ||
         (p.description && p.description.toLowerCase().includes(searchQuery))
       );
     }
 
     if (filtered.length === 0) {
-      productsContainer.innerHTML = `<p style="color: var(--text-muted); text-align: center; padding: 2rem;">Nenhum produto encontrado.</p>`;
+      productsContainer.innerHTML = window.safeHTML(`<p style="color: var(--text-muted); text-align: center; padding: 2rem;">Nenhum produto encontrado.</p>`);
       return;
     }
 
-    productsContainer.innerHTML = filtered.map(prod => {
+    productsContainer.innerHTML = window.safeHTML(filtered.map(prod => {
       const cat = categories.find(c => c.id === prod.category_id);
       return `
         <div class="item-row">
@@ -261,7 +261,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div>
               <div class="item-info-title">${prod.name} ${!prod.available ? '<span class="badge badge-closed">Pausado</span>' : ''}</div>
               <div class="item-info-meta">
-                ${cat ? cat.name : 'Sem categoria'} • 
+                ${cat ? cat.name : 'Sem categoria'} •
                 <strong style="color: var(--secondary);">${cs ? cs.formatCurrency(prod.price) : 'R$ ' + prod.price}</strong>
                 ${prod.has_crusts ? ' • Borda' : ''}
                 ${prod.has_extras ? ' • Extras' : ''}
@@ -274,7 +274,7 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
         </div>
       `;
-    }).join('');
+    }).join(''));
 
     productsContainer.querySelectorAll('.btn-edit-prod').forEach(btn => {
       btn.addEventListener('click', () => openProductModal(btn.dataset.id));
@@ -323,7 +323,7 @@ document.addEventListener('DOMContentLoaded', () => {
       priceInput.value = '';
       descInput.value = '';
       imgInput.value = '';
-      previewContainer.innerHTML = '';
+      previewContainer.innerHTML = window.safeHTML('');
       crustsInput.checked = true;
       extrasInput.checked = true;
       availInput.checked = true;
@@ -332,7 +332,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Live preview for URL input
     imgInput.oninput = (e) => {
       if (e.target.value) showPreview('prodImagePreview', e.target.value);
-      else previewContainer.innerHTML = '';
+      else previewContainer.innerHTML = window.safeHTML('');
     };
 
     productModalBackdrop.classList.add('active');
@@ -396,17 +396,17 @@ document.addEventListener('DOMContentLoaded', () => {
     orderCountBadge.textContent = `${orders.length} ${orders.length === 1 ? 'pedido' : 'pedidos'}`;
 
     if (orders.length === 0) {
-      ordersContainer.innerHTML = `
+      ordersContainer.innerHTML = window.safeHTML(`
         <div style="text-align: center; padding: 3rem 1rem; color: var(--text-muted);">
           <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📋</div>
           <p style="font-weight: 600; color: var(--text-secondary);">Nenhum pedido recebido ainda</p>
           <p style="font-size: 0.85rem; margin-top: 0.25rem;">Quando os clientes enviarem pedidos pelo cardápio, eles aparecerão aqui.</p>
         </div>
-      `;
+      `);
       return;
     }
 
-    ordersContainer.innerHTML = orders.map(order => {
+    ordersContainer.innerHTML = window.safeHTML(orders.map(order => {
       const dateStr = new Date(order.createdAt).toLocaleString('pt-BR');
       return `
         <div class="admin-card" style="margin-bottom: 1rem; padding: 1.2rem; background: var(--bg-card);">
@@ -431,8 +431,8 @@ document.addEventListener('DOMContentLoaded', () => {
             <ul style="margin-left: 1.25rem; margin-top: 0.25rem;">
               ${order.items.map(item => `
                 <li>
-                  ${item.quantity}x ${item.productName} 
-                  ${item.crust ? `(Borda: ${item.crust.name})` : ''} 
+                  ${item.quantity}x ${item.productName}
+                  ${item.crust ? `(Borda: ${item.crust.name})` : ''}
                   ${item.observation ? `— <em>"${item.observation}"</em>` : ''}
                   — <strong>${cs ? cs.formatCurrency(item.itemTotal) : 'R$ ' + item.itemTotal}</strong>
                 </li>
@@ -450,7 +450,7 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
         </div>
       `;
-    }).join('');
+    }).join(''));
   }
 
   // --- TAB 5: Link de Divulgação ---

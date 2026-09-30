@@ -4,7 +4,9 @@
   "type": "module",
   "description": "Cardápio Online com envio direto de pedidos para o WhatsApp - Static Site para GitHub Pages",
   "scripts": {
-    "test": "node tests/verify_endpoints.js && node tests/verify_whatsapp_logic.js"
+    "start": "node server.js",
+    "test": "node tests/run.mjs",
+    "build": "node scripts/build.mjs"
   },
   "keywords": [
     "cardapio",
@@ -16,6 +18,11 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@supabase/supabase-js": "^2.112.4"
+    "@supabase/supabase-js": "^2.112.4",
+    "dompurify": "3.4.16"
+  },
+  "devDependencies": {
+    "acorn": "8.18.0",
+    "jsdom": "30.1.1"
   }
 }

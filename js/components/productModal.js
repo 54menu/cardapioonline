@@ -91,7 +91,7 @@ function setupProductModal() {
     // Preço inicial para display
     const initialPrice = usePizzaSizes ? getPriceForProductSize(product, selectedSize) : Number(product.price || 0);
 
-    modalContent.innerHTML = `
+    modalContent.innerHTML = window.safeHTML(`
       <div class="modal-header">
         <div class="modal-title">${product.codigo ? '#' + String(product.codigo).padStart(3,'0') + ' ' : ''}${product.name}</div>
         <button class="modal-close-btn" id="btnCloseProductModal">✕</button>
@@ -260,7 +260,7 @@ function setupProductModal() {
           <span id="btnModalPriceTotal">${cs ? cs.formatCurrency(initialPrice) : 'R$ ' + initialPrice}</span>
         </button>
       </div>
-    `;
+    `);
 
     bindModalEvents(product, sizeGroup, crustGroup, extraGroup, allPizzas, pizzaSizes, usePizzaSizes);
 
@@ -344,7 +344,7 @@ function setupProductModal() {
             ? 'Modelo da loja: <strong>Proporcional</strong> — cada ½ vale metade do preço (ex: ½ R$68 + ½ R$78 = R$73)'
             : 'Modelo da loja: <strong>Maior pizza</strong> — pizza completa vale o sabor mais caro (ex: ½ R$68 + ½ R$78 = R$78)';
           help.style.display='block';
-          help.innerHTML = `Você vai adicionar <strong>${selectedFraction.label} ${product.name.replace('Pizza ','')}</strong> ${sizeLabel?`[${sizeLabel}]`:''} por <strong>${cs?cs.formatCurrency(price):'R$ '+price}</strong> (pizza inteira).<br> No carrinho ficará como <strong>${selectedFraction.label}</strong> — complete com outra <strong>${selectedFraction.label}</strong> do mesmo tamanho. Validação ao fechar garante pizzas completas.<br><span style="font-size:0.72rem; color:var(--text-muted);">${modeDesc} — configurável no painel em Configurações.</span>`;
+          help.innerHTML = window.safeHTML(`Você vai adicionar <strong>${selectedFraction.label} ${product.name.replace('Pizza ','')}</strong> ${sizeLabel?`[${sizeLabel}]`:''} por <strong>${cs?cs.formatCurrency(price):'R$ '+price}</strong> (pizza inteira).<br> No carrinho ficará como <strong>${selectedFraction.label}</strong> — complete com outra <strong>${selectedFraction.label}</strong> do mesmo tamanho. Validação ao fechar garante pizzas completas.<br><span style="font-size:0.72rem; color:var(--text-muted);">${modeDesc} — configurável no painel em Configurações.</span>`);
           help.style.borderColor='rgba(37,211,102,0.35)';
           help.style.background='rgba(37,211,102,0.08)';
           help.style.color='var(--text-primary)';
@@ -390,7 +390,7 @@ function setupProductModal() {
           // rebuild fraction options for new size
           const fracList = modalContent.querySelector('#fractionOptionsList');
           if(fracList){
-            fracList.innerHTML = buildFractionOptionsHtml(selectedSize);
+            fracList.innerHTML = window.safeHTML(buildFractionOptionsHtml(selectedSize));
             // rebind
             fracList.querySelectorAll('.fraction-option').forEach(opt=>{
               opt.addEventListener('click', ()=>{
@@ -413,7 +413,7 @@ function setupProductModal() {
           const cont = modalContent.querySelector('#flavorsSelectors');
           const grp = modalContent.querySelector('#flavorsGroup');
           if (cont && grp) {
-            cont.innerHTML = buildFlavorSelectors(selectedSize, allPizzas, cs);
+            cont.innerHTML = window.safeHTML(buildFlavorSelectors(selectedSize, allPizzas, cs));
             grp.style.display = (selectedSize?.max_flavors||1) > 1 && selectedFraction.value===1 ? 'block' : 'none';
             bindFlavorSelects();
           }
