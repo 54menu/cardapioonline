@@ -1,3 +1,4 @@
+import {subscriptionSummary} from './lib/subscription-summary.js';
 /**
  * Admin Panel - Supabase Version
  * Multi-tenant SaaS com autenticação Supabase Auth
@@ -580,6 +581,9 @@ function showCreateStorePanel(user, profile) {
 }
 
 function onAuthLogout() {
+  sidebarSubscriptionData=null;
+  const summary=document.getElementById('sidebarSubscription');
+  if(summary) summary.hidden=true;
   currentUser = null;
   currentUserProfile = null;
   currentStoreId = null;
@@ -703,6 +707,21 @@ function showPreview(containerId, url) {
 // ============================================
 // ASSINATURA PIX R$19 dia 01 (trial até próximo 01)
 // ============================================
+let sidebarSubscriptionData=null;
+function renderSidebarSubscription(sub){
+  sidebarSubscriptionData=sub;
+  const el=document.getElementById('sidebarSubscription');
+  if(!el) return;
+  const summary=subscriptionSummary(sub);
+  el.hidden=false;
+  el.className='sidebar-subscription sidebar-subscription--'+summary.tone;
+  const title=document.createElement('strong');
+  const detail=document.createElement('span');
+  title.textContent=summary.title;
+  detail.textContent=summary.detail;
+  el.replaceChildren(title,detail);
+}
+setInterval(()=>{if(currentStoreId) renderSidebarSubscription(sidebarSubscriptionData);},60000);
 async function renderSubscription(){
   if (!currentStoreId) return;
   const badge=document.getElementById('subscriptionStatusBadge');
@@ -714,6 +733,7 @@ async function renderSubscription(){
   if(!badge||!body) return;
   badge.textContent='carregando...';
   const { data: sub, error } = await subscriptionsApi.get(currentStoreId);
+  renderSidebarSubscription(error ? null : sub);
   const {data:notices}=await supabase.from('billing_notices').select('message,notice_date').eq('store_id',currentStoreId).order('notice_date',{ascending:false}).limit(1);
   let notice=document.getElementById('billingNotice');
   if(!notice){notice=document.createElement('p');notice.id='billingNotice';body.before(notice);}

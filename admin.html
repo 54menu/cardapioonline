@@ -14,7 +14,7 @@
 
   <!-- Stylesheets -->
   <link rel="stylesheet" href="css/main.css" />
-  <link rel="stylesheet" href="css/admin.css" />
+  <link rel="stylesheet" href="css/admin.css?v=20261002-plan-status" />
 
   <style>
     /* Auth Gate - Supabase Magic Link */
@@ -133,6 +133,7 @@
         <div>
           <div class="admin-brand-title" id="sidebarStoreName">Carregando...</div>
           <div class="admin-brand-sub">Painel do Lojista</div>
+          <div id="sidebarSubscription" class="sidebar-subscription" role="status" aria-live="polite" hidden></div>
         </div>
       </div>
 
@@ -1086,7 +1087,7 @@
   </div>
 
   <!-- Scripts (Module) -->
-  <script type="module" src="js/admin-supabase.js?v=20261002-pix-date"></script>
+  <script type="module" src="js/admin-supabase.js?v=20261002-plan-status"></script>
   <!-- Fallback não-módulo: garante authGate visível mesmo se type=module falhar (WebView antigo, esm.sh bloqueado) -->
   <script>
     (function(){
