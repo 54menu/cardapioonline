@@ -206,7 +206,7 @@ export const productsApi = {
   async listAdmin(storeId) {
     const { data, error } = await supabase
       .from('products')
-      .select('*, categories(name)')
+      .select('*, categories!products_category_id_fkey(name)')
       .eq('store_id', storeId)
       .order('display_order');
     return { data, error };
