@@ -10,7 +10,7 @@ Deno.serve(async req=>{
   const {data:{user},error:authError}=await client.auth.getUser();
   if(authError||!user) return response({error:'Entre na sua conta para gerar o PIX.'},401);
   const {store_id,amount}=await req.json();
-  if(![29,174].includes(Number(amount))) return response({error:'Plano inválido.'},400);
+  if(![19,114].includes(Number(amount))) return response({error:'Plano inválido.'},400);
   const {data:store,error:storeError}=await client.from('stores').select('id,name,owner_id').eq('id',store_id).single();
   if(storeError||store?.owner_id!==user.id) return response({error:'Loja não autorizada.'},403);
   const mpToken=required('MP_ACCESS_TOKEN');

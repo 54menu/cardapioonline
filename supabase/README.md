@@ -12,7 +12,7 @@ Para validar uma atualização na estrutura existente, envolva os corpos das mig
 
 ## Funções
 
-- `generate-pix`: exige usuário autenticado e propriedade da loja; planos aceitos: 29 ou 174. O valor é validado no servidor. A chave de idempotência é o identificador estável da fatura.
+- `generate-pix`: exige usuário autenticado e propriedade da loja; novas cobranças: 19 ou 114; confirmação de cobranças antigas preservada (29 ou 174). O valor é validado no servidor. A chave de idempotência é o identificador estável da fatura.
 - `webhook-mercadopago`: entrada pública com HMAC obrigatório e conferência na API Mercado Pago. Requer `MP_WEBHOOK_SECRET` e `MP_ACCESS_TOKEN` nos segredos do Supabase. Não colocar esses valores em arquivos ou no GitHub.
 - `create-order`: aceita pedidos de visitantes, recalcula preços usando o catálogo e grava por uma função SQL disponível apenas para service_role. Repetições do mesmo request_id retornam o mesmo pedido.
 

@@ -74,3 +74,14 @@ do $$ begin
  if exists(select 1 from public.v_recent_orders) then raise exception 'Unrelated user can read orders'; end if;
 end $$;
 reset role;
+-- New prices create real invoices; legacy amounts remain valid only for existing payments.
+do $$ declare sid uuid:=gen_random_uuid(); invoice jsonb; begin
+ insert into public.stores(id,owner_id,name,slug,phone) select sid,owner_id,'Price test',sid::text,'5500000000000' from public.stores limit 1;
+ insert into public.subscriptions(store_id,status,current_period_end) values(sid,'trial',current_date);
+ invoice:=public.prepare_billing(sid,19);
+ if (invoice->>'amount')::numeric<>19 then raise exception 'Incorrect monthly price'; end if;
+ update public.payments set mp_payment_id=sid::text where id=(invoice->>'id')::uuid;
+ perform public.apply_verified_payment(sid::text,sid,19,'approved');
+ if not exists(select 1 from public.subscriptions where store_id=sid and status='active') then raise exception 'Monthly activation failed'; end if;
+ begin perform public.prepare_billing(sid,29); raise exception 'Old price accepted for new invoice'; exception when raise_exception then if sqlerrm<>'Invalid plan' then raise; end if; end;
+end $$;

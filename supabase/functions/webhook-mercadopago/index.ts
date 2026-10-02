@@ -10,7 +10,7 @@ Deno.serve(async req=>{
   const mpResponse=await fetch('https://api.mercadopago.com/v1/payments/'+id,{headers:{Authorization:'Bearer '+required('MP_ACCESS_TOKEN')}});
   if(!mpResponse.ok) return response({error:'Provider temporarily unavailable'},502);
   const payment=await mpResponse.json();
-  if(String(payment.id)!==id||payment.currency_id!=='BRL'||!payment.external_reference||![29,174].includes(Number(payment.transaction_amount))) return response({error:'Payment mismatch'},422);
+  if(String(payment.id)!==id||payment.currency_id!=='BRL'||!payment.external_reference||![19,114,29,174].includes(Number(payment.transaction_amount))) return response({error:'Payment mismatch'},422);
   const db=createClient(required('SUPABASE_URL'),required('SUPABASE_SERVICE_ROLE_KEY'));
   const {error}=await db.rpc('apply_verified_payment',{p_payment_id:id,p_store_id:payment.external_reference,p_amount:Number(payment.transaction_amount),p_status:payment.status});
   if(error) throw error;

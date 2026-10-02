@@ -660,7 +660,7 @@ export const profilesApi = {
 };
 
 // ============================================
-// SUBSCRIPTIONS API - PIX R$29 dia 01, carência 06, trial até próximo 01
+// SUBSCRIPTIONS API - PIX R$19 dia 01, carência 06, trial até próximo 01
 // ============================================
 function nextDueDateStr(from = new Date()){
   const d = new Date(from); d.setDate(1); d.setMonth(d.getMonth()+1);

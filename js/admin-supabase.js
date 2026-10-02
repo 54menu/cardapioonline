@@ -695,7 +695,7 @@ function showPreview(containerId, url) {
 }
 
 // ============================================
-// ASSINATURA PIX R$29 dia 01 (trial até próximo 01)
+// ASSINATURA PIX R$19 dia 01 (trial até próximo 01)
 // ============================================
 async function renderSubscription(){
   const badge=document.getElementById('subscriptionStatusBadge');
@@ -743,7 +743,7 @@ async function renderSubscription(){
       else pixQr.innerHTML=window.safeHTML('');
     }
   } else {
-    if(pixCopy) pixCopy.textContent='Clique em Gerar PIX R$29 para criar a cobrança deste mês.';
+    if(pixCopy) pixCopy.textContent='Clique em Gerar PIX R$19 para criar a cobrança deste mês.';
     if(pixQr) pixQr.innerHTML=window.safeHTML('');
   }
   // histórico
@@ -771,8 +771,8 @@ async function generatePix(amount){
   }catch(error){showToast(error.message,'error');}
   finally{showLoading(false);}
 }
-document.getElementById('btnGeneratePix29')?.addEventListener('click', ()=> generatePix(29.00));
-document.getElementById('btnGeneratePix174')?.addEventListener('click', ()=> generatePix(174.00));
+document.getElementById('btnGeneratePix19')?.addEventListener('click', ()=> generatePix(19.00));
+document.getElementById('btnGeneratePix114')?.addEventListener('click', ()=> generatePix(114.00));
 document.getElementById('btnCopyPix')?.addEventListener('click', ()=>{
   const t=document.getElementById('subscriptionPixCopy')?.textContent||'';
   if(!t) return showToast('Nada para copiar','info');
