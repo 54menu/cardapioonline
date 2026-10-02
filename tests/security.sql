@@ -55,3 +55,22 @@ do $$ declare sid uuid:=gen_random_uuid(); rid uuid:=gen_random_uuid(); a jsonb;
  if a->>'id'<>b->>'id' or (select count(*) from public.orders where store_id=sid)<>1 then raise exception 'Duplicate order'; end if;
 end $$;
 select 'security and billing checks passed; all changes will roll back' as result;
+-- Views must enforce the caller's table policies, including future rows.
+do $$ begin
+ if exists(select 1 from pg_class where oid in ('public.v_recent_orders'::regclass,'public.v_store_menu'::regclass,'public.v_offers_full'::regclass) and not coalesce(reloptions @> array['security_invoker=true'],false)) then raise exception 'View bypasses RLS'; end if;
+ if has_function_privilege('anon','public.ensure_subscription(uuid)','EXECUTE') or has_function_privilege('anon','public.is_superadmin()','EXECUTE') then raise exception 'Unexpected anonymous function grant'; end if;
+end $$;
+select set_config('request.jwt.claims','{"role":"anon"}',true);
+set local role anon;
+do $$ begin
+ perform 1 from public.v_store_menu limit 1;
+ perform 1 from public.v_offers_full limit 1;
+ begin perform 1 from public.v_recent_orders; raise exception 'Anonymous order view readable'; exception when insufficient_privilege then null; end;
+end $$;
+reset role;
+select set_config('request.jwt.claims',json_build_object('sub',gen_random_uuid(),'role','authenticated')::text,true);
+set local role authenticated;
+do $$ begin
+ if exists(select 1 from public.v_recent_orders) then raise exception 'Unrelated user can read orders'; end if;
+end $$;
+reset role;

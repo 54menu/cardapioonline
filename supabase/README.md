@@ -31,3 +31,11 @@ Faturas antigas com identificador `mock_` não são reutilizadas para pagamento.
 A validação de assinatura segue o [formato de Webhooks do Mercado Pago](https://www.mercadopago.com.br/developers/pt/docs/wallet-connect/notifications). Reentregas são tratadas de forma idempotente no banco.
 
 A autenticação interna considera a [compatibilidade das novas chaves do Supabase](https://supabase.com/docs/guides/getting-started/migrating-to-new-api-keys).
+
+## Verificação em produção — 02/10/2026
+
+Aplicada a migração `20261002125932_secure_views_and_function_grants.sql`: as três views usam `security_invoker`; pedidos recentes exigem autenticação e respeitam as políticas da loja. Revogado acesso anônimo às funções internas de assinatura e administração. A definição inicial do banco agora inclui as views. Dependência Supabase fixada em 2.112.4.
+
+Validação: testes locais e build aprovados; testes SQL executados com rollback; catálogo e views públicas retornam 200; pedidos, perfis, assinaturas, convites e view de pedidos rejeitam acesso anônimo (401). Webhook rejeita chamada sem assinatura (401). Dados preservados: 5 lojas, 266 produtos, 16 pedidos. Rotina de assinaturas executou com sucesso em 01 e 02/10.
+
+O verificador do Supabase retorna zero ERROR e sete WARN: seis relativos a funções SECURITY DEFINER deliberadamente acessíveis, com autorização interna ou retorno público limitado; um sobre proteção contra senhas vazadas desativada. Essa configuração de Auth permanece pendente. Não foi efetuado pagamento real: a confirmação ponta a ponta de um PIX legítimo ainda requer uma transação controlada. Pagamentos legados simulados não foram tratados como pagamentos reais.

@@ -539,3 +539,66 @@ CREATE INDEX idx_product_size_prices_size ON public.product_size_prices USING bt
 CREATE INDEX idx_promotions_store ON public.promotions USING btree (store_id);
 CREATE INDEX idx_promotions_store_active ON public.promotions USING btree (store_id, is_active, display_order);
 CREATE INDEX idx_promotions_type ON public.promotions USING btree (promo_type);
+
+CREATE VIEW public.v_offers_full WITH (security_invoker = true) AS
+ SELECT o.id,
+    o.store_id,
+    o.name,
+    o.description,
+    o.price,
+    o.active,
+    o.max_per_order,
+    o.display_order,
+    o.created_at,
+    o.updated_at,
+    json_agg(DISTINCT jsonb_build_object('id', g.id, 'name', g.name, 'quantity', g.quantity)) AS groups
+   FROM (offers o
+     LEFT JOIN offer_groups g ON ((g.offer_id = o.id)))
+  GROUP BY o.id;
+
+CREATE VIEW public.v_store_menu WITH (security_invoker = true) AS
+ SELECT s.id AS store_id,
+    s.slug,
+    s.name AS store_name,
+    s.phone,
+    s.logo_url,
+    s.cover_url,
+    s.default_delivery_fee,
+    s.min_order_value,
+    json_agg(json_build_object('id', c.id, 'name', c.name, 'order', c.display_order, 'products', ( SELECT json_agg(json_build_object('id', p.id, 'name', p.name, 'description', p.description, 'price', p.base_price, 'image', p.image_url, 'is_pizza', p.is_pizza, 'has_crusts', p.has_crusts, 'has_extras', p.has_extras, 'available', p.available, 'order', p.display_order) ORDER BY p.display_order) AS json_agg
+           FROM products p
+          WHERE ((p.category_id = c.id) AND (p.available = true)))) ORDER BY c.display_order) AS categories
+   FROM (stores s
+     LEFT JOIN categories c ON (((c.store_id = s.id) AND (c.is_active = true))))
+  WHERE (s.status = 'open'::text)
+  GROUP BY s.id, s.slug, s.name, s.phone, s.logo_url, s.cover_url, s.default_delivery_fee, s.min_order_value;
+
+CREATE VIEW public.v_recent_orders WITH (security_invoker = true) AS
+ SELECT o.id,
+    o.store_id,
+    o.order_number,
+    o.customer_name,
+    o.customer_phone,
+    o.customer_email,
+    o.customer_address,
+    o.order_type,
+    o.items,
+    o.subtotal,
+    o.delivery_fee,
+    o.discount,
+    o.total,
+    o.payment_method,
+    o.payment_status,
+    o.status,
+    o.notes,
+    o.whatsapp_sent,
+    o.whatsapp_message_id,
+    o.created_at,
+    o.updated_at,
+    o.completed_at,
+    s.name AS store_name,
+    s.slug AS store_slug
+   FROM (orders o
+     JOIN stores s ON ((s.id = o.store_id)))
+  WHERE (o.created_at > (now() - '30 days'::interval))
+  ORDER BY o.created_at DESC;
