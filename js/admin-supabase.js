@@ -39,8 +39,8 @@ let currentUser = null;
 let currentUserProfile = null;
 let ordersSubscription = null;
 let isSuperadmin = false;
-let authInitialized = false;
-let isAuthProcessing = false;
+let loadedAuthUserId = null;
+let authLoadPromise = null;
 
 // Utilitários
 function showLoading(show) {
@@ -333,13 +333,17 @@ async function initAuth() {
     btn.textContent = 'Entrando...';
     errorEl.textContent = '';
 
-    const { error } = await auth.signIn(email, password);
-
-    if (error) {
+    try {
+      const { data, error } = await auth.signIn(email, password);
+      if (error) throw error;
+      if (!data?.user) throw new Error('Não foi possível iniciar a sessão.');
+      await onAuthSuccess(data.user);
+    } catch (error) {
       errorEl.textContent = error.message;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Entrar';
     }
-    btn.disabled = false;
-    btn.textContent = 'Entrar';
   });
 
   // Invite Signup Form
@@ -401,20 +405,14 @@ async function initAuth() {
     await auth.signOut();
   });
 
-  // Listener de mudanças de auth
+  // Leave the auth callback before performing Supabase queries.
   auth.onAuthStateChange((event, session) => {
     if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
-      // Na primeira carga, o getSession() manual já cuida disso
-      if (authInitialized) {
-        if (window.location.search.includes('invite=')) {
-          window.history.replaceState({}, '', window.location.pathname);
-        }
-        onAuthSuccess(session.user);
-      } else {
-        authInitialized = true;
-      }
+      setTimeout(() => {
+        onAuthSuccess(session.user).catch(error => showToast(error.message, 'error'));
+      }, 0);
     } else if (event === 'SIGNED_OUT') {
-      authInitialized = false;
+      loadedAuthUserId = null;
       onAuthLogout();
     }
   });
@@ -504,9 +502,21 @@ async function setupInviteSignup(token) {
 }
 
 async function onAuthSuccess(user) {
-  if (isAuthProcessing) return;
-  isAuthProcessing = true;
+  if (authLoadPromise) return authLoadPromise;
+  if (loadedAuthUserId === user.id) return;
+  authLoadPromise = loadAuthenticatedUser(user);
   try {
+    await authLoadPromise;
+    loadedAuthUserId = user.id;
+  } finally {
+    authLoadPromise = null;
+  }
+}
+
+async function loadAuthenticatedUser(user) {
+  if (window.location.search.includes('invite=')) {
+    window.history.replaceState({}, '', window.location.pathname);
+  }
   currentUser = user;
   console.log('✅ Usuário logado:', user.email);
 
@@ -532,10 +542,6 @@ async function onAuthSuccess(user) {
 
   // Se NÃO tem loja: primeiro login → mostra formulário criar loja
   showCreateStorePanel(user, profile);
-  } finally {
-    // libera após 800ms para evitar reentrada rápida por INITIAL_SESSION + getSession
-    setTimeout(()=>{ isAuthProcessing = false; }, 800);
-  }
 }
 
 function showAdminLayout(user) {
@@ -685,7 +691,7 @@ async function loadStoreData() {
 
   // Garante assinatura trial até próximo dia 01
   try { await subscriptionsApi.ensure(currentStoreId); } catch(e){ console.warn('ensure subscription falhou', e.message); }
-  renderSubscription();
+  await renderSubscription();
 }
 
 function showPreview(containerId, url) {
@@ -698,6 +704,7 @@ function showPreview(containerId, url) {
 // ASSINATURA PIX R$19 dia 01 (trial até próximo 01)
 // ============================================
 async function renderSubscription(){
+  if (!currentStoreId) return;
   const badge=document.getElementById('subscriptionStatusBadge');
   const body=document.getElementById('subscriptionCardBody');
   const pixArea=document.getElementById('subscriptionPixArea');
