@@ -1,4 +1,5 @@
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.112.4';
+import {formatPixExpiration} from '../_shared/pix.js';
 import {cors,response,required} from '../_shared/http.ts';
 Deno.serve(async req=>{
  if(req.method==='OPTIONS') return new Response('ok',{headers:cors});
@@ -36,7 +37,7 @@ Deno.serve(async req=>{
    method:'POST',headers:{Authorization:'Bearer '+mpToken,'Content-Type':'application/json','X-Idempotency-Key':invoice.id},
    body:JSON.stringify({transaction_amount:Number(invoice.amount),description:store.name+' - Assinatura '+invoice.competence,
     payment_method_id:'pix',external_reference:store_id,notification_url:url+'/functions/v1/webhook-mercadopago',
-    payer:{email:user.email},date_of_expiration:invoice.grace_until})
+    payer:{email:user.email},date_of_expiration:formatPixExpiration(invoice.grace_until)})
   });
   if(!mpResponse.ok) {
    const failure=await mpResponse.json().catch(()=>({}));

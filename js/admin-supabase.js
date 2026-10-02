@@ -725,7 +725,7 @@ async function renderSubscription(){
     if(pixArea) pixArea.style.display='block';
     return;
   }
-  const statusMap={ trial:{label:'🎁 Trial até próximo dia 01',cls:'badge-primary'}, active:{label:'✅ Ativa',cls:'badge-open'}, grace:{label:'⏳ Carência até dia 06',cls:'badge-primary'}, past_due:{label:'⚠️ Vencida',cls:'badge-closed'}, blocked:{label:'🚫 Bloqueada',cls:'badge-closed'}, canceled:{label:'❌ Cancelada',cls:'badge-closed'}};
+  const statusMap={ trial:{label:'🎁 Em período de teste',cls:'badge-primary'}, active:{label:'✅ Ativa',cls:'badge-open'}, grace:{label:'⏳ Carência até dia 06',cls:'badge-primary'}, past_due:{label:'⚠️ Vencida',cls:'badge-closed'}, blocked:{label:'🚫 Bloqueada',cls:'badge-closed'}, canceled:{label:'❌ Cancelada',cls:'badge-closed'}};
   const st=statusMap[sub.status]||{label:sub.status,cls:'badge-primary'};
   badge.textContent=st.label;
   badge.className='badge '+st.cls;
@@ -734,13 +734,15 @@ async function renderSubscription(){
   body.innerHTML=window.safeHTML(`
     <div style="display:flex; flex-wrap:wrap; gap:0.75rem; font-size:0.9rem;">
       <span><strong>Plano:</strong> R$${Number(sub.plan_amount).toFixed(2).replace('.',',')}/mês</span>
-      <span><strong>Próximo vencimento:</strong> dia 01 — <strong>${dueFmt}</strong> (vence dia 06 23:59)</span>
+      <span><strong>Próximo vencimento:</strong> <strong>${dueFmt}</strong></span>
       <span><strong>Status:</strong> ${st.label}</span>
     </div>
     ${prepaidTxt}
-    <p style="font-size:0.82rem; color:var(--text-muted); margin-top:0.5rem;">Vencimento sempre dia 01. PIX expira dia 06 23:59. Lembretes 03 e 05 via e-mail e WhatsApp se pendente. Primeira cobrança só no próximo dia 01 (trial).</p>
+    <p style="font-size:0.82rem; color:var(--text-muted); margin-top:0.5rem;">${sub.status==='trial' ? 'Período de teste até '+dueFmt+'. A fatura futura não indica atraso.' : 'Consulte abaixo a situação das faturas.'} Os avisos de cobrança aparecem neste painel.</p>
   `);
   if(pixArea) pixArea.style.display='block';
+  const copyButton=document.getElementById('btnCopyPix');
+  if(copyButton) copyButton.disabled=!sub.pix_copy_paste;
   // mostra PIX se houver
   if(sub.pix_qr || sub.pix_copy_paste){
     if(pixCopy) pixCopy.textContent=sub.pix_copy_paste||'';
@@ -750,7 +752,7 @@ async function renderSubscription(){
       else pixQr.innerHTML=window.safeHTML('');
     }
   } else {
-    if(pixCopy) pixCopy.textContent='Clique em Gerar PIX R$19 para criar a cobrança deste mês.';
+    if(pixCopy) pixCopy.textContent='Nenhum PIX emitido. Clique em Gerar PIX R$19 para solicitar o código.';
     if(pixQr) pixQr.innerHTML=window.safeHTML('');
   }
   // histórico
