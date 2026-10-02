@@ -19,7 +19,17 @@ Deno.serve(async req=>{
   if(ensureError) throw ensureError;
   const db=createClient(url,required('SUPABASE_SERVICE_ROLE_KEY'));
   const {data:invoice,error}=await db.rpc('prepare_billing',{p_store_id:store_id,p_amount:Number(amount)});
-  if(error) return response({error:error.message},409);
+  if(error) {
+   const messages:Record<string,string>={
+    'An invoice with a different plan already exists for this period':'Já existe uma fatura com outro valor para este período. Use o plano original ou solicite a conciliação antes de trocar.',
+    'Period already paid':'Este período já está pago.',
+    'Subscription already paid in advance':'Sua assinatura já está paga antecipadamente.',
+    'Invoice expired; contact support for reconciliation':'A fatura expirou. Solicite a conciliação antes de gerar outra.',
+    'Subscription canceled':'Esta assinatura está cancelada.'
+   };
+   console.warn('generate-pix billing conflict',error.message);
+   return response({error:messages[error.message]||'Não foi possível preparar esta fatura. Contate o suporte.'},409);
+  }
   if(invoice.mp_payment_id?.startsWith('mock_')) return response({error:'Esta fatura antiga é de teste. Contate o suporte para conciliá-la antes de pagar.'},409);
   if(invoice.mp_payment_id && invoice.pix_copy_paste) return response({...invoice,ok:true});
   const mpResponse=await fetch('https://api.mercadopago.com/v1/payments',{
@@ -28,7 +38,14 @@ Deno.serve(async req=>{
     payment_method_id:'pix',external_reference:store_id,notification_url:url+'/functions/v1/webhook-mercadopago',
     payer:{email:user.email},date_of_expiration:invoice.grace_until})
   });
-  if(!mpResponse.ok) throw new Error('Payment provider rejected the request');
+  if(!mpResponse.ok) {
+   const failure=await mpResponse.json().catch(()=>({}));
+   // Log only provider codes, never credentials, payer data or raw response bodies.
+   const code=String(failure.error||'unknown').replace(/[^a-zA-Z0-9_.-]/g,'').slice(0,80);
+   const causes=Array.isArray(failure.cause)?failure.cause.map((c:{code?:unknown})=>String(c.code||'').replace(/[^a-zA-Z0-9_.-]/g,'').slice(0,40)).slice(0,5):[];
+   console.error('generate-pix provider rejection',JSON.stringify({status:mpResponse.status,code,causes}));
+   return response({error:'O Mercado Pago recusou a geração do PIX. Nenhum QR Code foi emitido. Contate o suporte com o código MP-'+mpResponse.status+'-'+code+'.'},502);
+  }
   const mp=await mpResponse.json();
   const transaction=mp.point_of_interaction?.transaction_data;
   if(!mp.id||!transaction?.qr_code) throw new Error('Invalid payment provider response');
