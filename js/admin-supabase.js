@@ -275,9 +275,7 @@ function scheduleToText(schedule){
 function updateComputedStatus(){
   const sch=getScheduleFromForm();
   const open=isStoreOpenNow(sch);
-  const inp=document.getElementById('storeStatusInput');
   const txt=document.getElementById('storeStatusText');
-  if(inp) inp.checked=open;
   if(txt){ txt.textContent=open?'Aberto':'Fechado'; txt.style.color=open?'var(--status-open)':'var(--status-closed)'; }
   return open;
 }
@@ -648,9 +646,7 @@ async function loadStoreData() {
   renderSchedule(schedule);
   document.getElementById('storeHoursInput').value = scheduleToText(schedule);
   const isOpen = isStoreOpenNow(schedule);
-  const statusInput = document.getElementById('storeStatusInput');
   const statusText = document.getElementById('storeStatusText');
-  statusInput.checked = isOpen;
   statusText.textContent = isOpen ? 'Aberto' : 'Fechado';
   statusText.style.color = isOpen ? 'var(--status-open)' : 'var(--status-closed)';
 
@@ -903,11 +899,6 @@ document.getElementById('storeSettingsForm').addEventListener('submit', async (e
   }
 });
 
-document.getElementById('storeStatusInput').addEventListener('change', (e) => {
-  const statusText = document.getElementById('storeStatusText');
-  statusText.textContent = e.target.checked ? 'Aberto' : 'Fechado';
-  statusText.style.color = e.target.checked ? 'var(--status-open)' : 'var(--status-closed)';
-});
 
 // ============================================
 // CATEGORIAS
