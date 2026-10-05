@@ -46,6 +46,15 @@ export const auth = {
     return { data, error };
   },
 
+  // Cadastro público; perfil e permissões são definidos pelo banco.
+  async signUp(email, password) {
+    return supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: getBaseUrlLib() + '/admin.html' }
+    });
+  },
+
   // Signup com convite (email + senha + token)
   async signUpWithInvite(email, password, inviteToken, fullName) {
     const { data, error } = await supabase.auth.signUp({

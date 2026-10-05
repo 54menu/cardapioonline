@@ -80,6 +80,22 @@
       <h1 id="authTitle">🍕 Cardápio Online</h1>
       <p id="authSubtitle">Painel administrativo multi-loja. Faça login para gerenciar sua pizzaria.</p>
 
+      <form class="auth-form" id="publicSignupForm" style="display: none;">
+        <p>Crie sua conta, configure sua loja e teste grátis até o próximo dia 1. Sem cartão e sem código de convite.</p>
+        <label style="display: flex; flex-direction: column; gap: 0.4rem;">
+          <span>E-mail</span>
+          <input type="email" class="auth-input" id="publicSignupEmail" placeholder="seu@email.com" required autocomplete="email" />
+        </label>
+        <label style="display: flex; flex-direction: column; gap: 0.4rem;">
+          <span>Senha</span>
+          <input type="password" class="auth-input" id="publicSignupPassword" placeholder="Mínimo 6 caracteres" required minlength="6" autocomplete="new-password" />
+        </label>
+        <button type="submit" class="auth-btn" id="publicSignupBtn">Criar conta e testar grátis</button>
+        <div class="auth-error" id="publicSignupError" role="alert"></div>
+        <p id="publicSignupStatus" role="status" aria-live="polite"></p>
+        <a href="admin.html">Já tenho conta — entrar</a>
+      </form>
+
       <!-- Form: Cadastro por Convite (quando ?invite=TOKEN) -->
       <form class="auth-form" id="inviteSignupForm" style="display: none;">
         <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: var(--radius-md); padding: 0.75rem; margin-bottom: 0.5rem;">
@@ -113,6 +129,7 @@
         </label>
         <button type="submit" class="auth-btn" id="passwordBtn">Entrar</button>
         <div class="auth-error" id="passwordError" aria-live="polite"></div>
+        <a href="admin.html?signup=1">Criar conta e testar grátis até o próximo dia 1</a>
       </form>
 
       <div class="auth-hint" id="authHint" style="display: none;">
@@ -1083,7 +1100,7 @@
   </div>
 
   <!-- Scripts (Module) -->
-  <script type="module" src="js/admin-supabase.js?v=20261002-plan-status"></script>
+  <script type="module" src="js/admin-supabase.js?v=20261005-registration"></script>
   <!-- Fallback não-módulo: garante authGate visível mesmo se type=module falhar (WebView antigo, esm.sh bloqueado) -->
   <script>
     (function(){

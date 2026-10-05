@@ -2,10 +2,10 @@ import {subscriptionSummary} from './lib/subscription-summary.js';
 /**
  * Admin Panel - Supabase Version
  * Multi-tenant SaaS com autenticação Supabase Auth
- * Sistema de Convites (invite-only)
+ * Cadastro público e convites opcionais
  */
 
-import { supabase, auth, storeApi, categoriesApi, productsApi, addonGroupsApi, addonOptionsApi, neighborhoodsApi, ordersApi, settingsApi, storageApi, invitesApi, profilesApi, pizzaSizesApi, productSizePricesApi, subscriptionsApi, paymentsApi, offersApi, offerGroupsApi, offerGroupItemsApi, offerSchedulesApi, campaignsApi } from './lib/supabase.js?v=20260930';
+import { supabase, auth, storeApi, categoriesApi, productsApi, addonGroupsApi, addonOptionsApi, neighborhoodsApi, ordersApi, settingsApi, storageApi, invitesApi, profilesApi, pizzaSizesApi, productSizePricesApi, subscriptionsApi, paymentsApi, offersApi, offerGroupsApi, offerGroupItemsApi, offerSchedulesApi, campaignsApi } from './lib/supabase.js?v=20261005-registration';
 import storage from './state/storage-supabase.js?v=20260930';
 
 // Expose para compatibilidade global
@@ -345,6 +345,46 @@ async function initAuth() {
     }
   });
 
+  // Cadastro direto sem convite. Uma conta sem sessão aguarda confirmação de e-mail.
+  const publicSignupForm = document.getElementById('publicSignupForm');
+  publicSignupForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('publicSignupBtn');
+    if (btn.disabled || !publicSignupForm.reportValidity()) return;
+    const errorEl = document.getElementById('publicSignupError');
+    const statusEl = document.getElementById('publicSignupStatus');
+    btn.disabled = true;
+    btn.textContent = 'Criando conta...';
+    errorEl.textContent = '';
+    statusEl.textContent = '';
+    try {
+      const email = document.getElementById('publicSignupEmail').value.trim();
+      const password = document.getElementById('publicSignupPassword').value;
+      const { data, error } = await auth.signUp(email, password);
+      if (error) throw error;
+      if (data?.session?.user) {
+        await onAuthSuccess(data.session.user);
+      } else if (data?.user) {
+        publicSignupForm.reset();
+        statusEl.textContent = 'Confira seu e-mail e a caixa de spam. Se o cadastro for novo, confirme seu endereço pelo link recebido e entre para configurar sua loja. Se já tem conta, faça login.';
+      } else {
+        throw new Error('Não foi possível concluir o cadastro. Tente novamente.');
+      }
+    } catch (error) {
+      const message = error?.message || '';
+      if (/already registered|already been registered|user_already_exists/i.test(message)) {
+        errorEl.textContent = 'Este e-mail já possui conta. Use o link abaixo para entrar.';
+      } else if (/rate limit|429|too many/i.test(message)) {
+        errorEl.textContent = 'Muitas tentativas em pouco tempo. Aguarde alguns minutos e tente novamente.';
+      } else {
+        errorEl.textContent = 'Não foi possível concluir o cadastro. Verifique sua conexão e tente novamente. Se continuar, entre em contato com o suporte.';
+      }
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Criar conta e testar grátis';
+    }
+  });
+
   // Invite Signup Form
   inviteSignupForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -449,6 +489,12 @@ async function initAuth() {
     await onAuthSuccess(session.user);
     return;
   }
+  if (urlParams.get('signup') === '1') {
+    passwordForm.style.display = 'none';
+    publicSignupForm.style.display = 'flex';
+    document.getElementById('authTitle').textContent = 'Crie sua conta';
+    document.getElementById('authSubtitle').textContent = 'Seu cardápio começa aqui. Cadastro sem convite.';
+  }
   // NÃO logado e SEM invite → mostra gate de login (ESSENCIAL para mobile primeira visita)
   authGate.classList.add('active');
   showLoading(false);
@@ -513,7 +559,7 @@ async function onAuthSuccess(user) {
 }
 
 async function loadAuthenticatedUser(user) {
-  if (window.location.search.includes('invite=')) {
+  if (/[?&](invite|signup)=/.test(window.location.search)) {
     window.history.replaceState({}, '', window.location.pathname);
   }
   currentUser = user;
@@ -598,6 +644,8 @@ function onAuthLogout() {
   document.querySelectorAll('.admin-nav-item').forEach(item => item.style.display = 'flex');
 
   // Reset forms
+  document.getElementById('publicSignupForm').reset();
+  document.getElementById('publicSignupForm').style.display = 'none';
   document.getElementById('passwordForm').reset();
   document.getElementById('inviteSignupForm').reset();
   document.getElementById('passwordForm').style.display = 'block';
@@ -606,7 +654,7 @@ function onAuthLogout() {
   document.getElementById('authSubtitle').textContent = 'Painel administrativo multi-loja. Faça login para gerenciar sua pizzaria.';
 
   // Clean URL
-  if (window.location.search.includes('invite=')) {
+  if (/[?&](invite|signup)=/.test(window.location.search)) {
     window.history.replaceState({}, '', window.location.pathname);
   }
 }
