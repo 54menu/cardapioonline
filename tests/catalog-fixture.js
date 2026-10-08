@@ -1,0 +1,20 @@
+export const sid='11111111-1111-4111-8111-111111111111',uid='22222222-2222-4222-8222-222222222222',cat='33333333-3333-4333-8333-333333333333',size='44444444-4444-4444-8444-444444444444',pid='55555555-5555-4555-8555-555555555555',off='66666666-6666-4666-8666-666666666666';
+export const fixture=`create role anon;create role authenticated;create schema auth;create schema private;
+ create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+ create table stores(id uuid primary key,owner_id uuid);create table categories(id uuid primary key,store_id uuid);
+ create table products(id uuid primary key default gen_random_uuid(),store_id uuid not null references stores,category_id uuid not null references categories,name text not null,description text,image_url text,codigo integer,is_pizza boolean not null,available boolean not null,has_crusts boolean not null default false,has_extras boolean not null default false,is_featured boolean not null default false,featured_order integer not null default 0,base_price numeric not null);
+ create table pizza_sizes(id uuid primary key,store_id uuid not null references stores,is_active boolean not null);
+ create table product_size_prices(product_id uuid references products on delete cascade,size_id uuid references pizza_sizes on delete cascade,price numeric not null,primary key(product_id,size_id));
+ create function private.member_store(sid uuid) returns boolean language sql security definer set search_path='' as $$select exists(select 1 from public.stores where id=sid and owner_id=auth.uid())$$;
+ grant usage on schema public,auth,private to authenticated,anon;
+ grant select on stores,categories to authenticated;
+ grant select,insert,update,delete on products,pizza_sizes,product_size_prices to authenticated;
+ alter table products enable row level security;alter table pizza_sizes enable row level security;alter table product_size_prices enable row level security;
+ create policy member on products for all to authenticated using(private.member_store(store_id)) with check(private.member_store(store_id));
+ create policy member on pizza_sizes for all to authenticated using(private.member_store(store_id)) with check(private.member_store(store_id));
+ create policy member on product_size_prices for all to authenticated using(exists(select 1 from products p join pizza_sizes s on s.store_id=p.store_id where p.id=product_id and s.id=size_id and private.member_store(p.store_id))) with check(exists(select 1 from products p join pizza_sizes s on s.store_id=p.store_id where p.id=product_id and s.id=size_id and private.member_store(p.store_id)));
+ insert into stores values('${sid}','${uid}');insert into categories values('${cat}','${sid}');
+ insert into pizza_sizes values('${size}','${sid}',true),('${off}','${sid}',false);
+ insert into products(id,store_id,category_id,name,base_price,is_pizza,available) select gen_random_uuid(),'${sid}','${cat}','Legacy '||n,0,true,true from generate_series(1,37) n;
+
+create role service_role bypassrls;create table orders(id uuid primary key default gen_random_uuid());grant insert,select on orders to authenticated,service_role;`;

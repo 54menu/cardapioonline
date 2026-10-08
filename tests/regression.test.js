@@ -4,8 +4,8 @@ import {priceOrder} from '../supabase/functions/_shared/pricing.js';
 import {verifySignature} from '../supabase/functions/_shared/signature.js';
 const catalog={store:{id:'shop',name:'Loja',phone:'5585999999999',default_delivery_fee:7,min_order_value:0},settings:{},
  products:[{id:'pizza',name:'Pizza A',base_price:40,is_pizza:true,has_crusts:true,has_extras:true},{id:'pizza2',name:'Pizza B',base_price:60,is_pizza:true},{id:'drink',name:'Bebida',base_price:10}],
- sizes:[{id:'g',name:'Grande',max_flavors:4}],prices:[],addons:[{id:'crust',name:'Borda',price_diff:8,group_name:'Bordas'},{id:'extra',name:'Queijo',price_diff:4,group_name:'Extras'}],neighborhoods:[{id:'a',delivery_fee:5},{id:'b',delivery_fee:9}],offers:[]};
-const order=()=>({items:[{productId:'pizza',quantity:1}],orderType:'pickup',customer:{name:'Teste',phone:'85999999999'},payment:{method:'pix'},total:40});
+ sizes:[{id:'g',name:'Grande',max_flavors:4}],prices:[{product_id:'pizza',size_id:'g',price:40},{product_id:'pizza2',size_id:'g',price:60}],addons:[{id:'crust',name:'Borda',price_diff:8,group_name:'Bordas'},{id:'extra',name:'Queijo',price_diff:4,group_name:'Extras'}],neighborhoods:[{id:'a',delivery_fee:5},{id:'b',delivery_fee:9}],offers:[]};
+const order=()=>({items:[{productId:'pizza',size:{id:'g'},quantity:1}],orderType:'pickup',customer:{name:'Teste',phone:'85999999999'},payment:{method:'pix'},total:40});
 test('prices come from catalog, not user values',()=>{const o=order();o.items[0].unitPrice=0.01;o.items[0].itemTotal=0.01;assert.equal(priceOrder(o,catalog).total,40);});
 test('rejects negative quantity, foreign products and extras',()=>{
  for(const item of [{productId:'pizza',quantity:-1},{productId:'foreign',quantity:1},{productId:'pizza',quantity:1,extras:[{id:'foreign',price:0}]}])assert.throws(()=>priceOrder({...order(),items:[item]},catalog));
