@@ -1,3 +1,4 @@
+import {validateProductPrices} from './lib/product-prices.js';
 import {subscriptionSummary} from './lib/subscription-summary.js';
 /**
  * Admin Panel - Supabase Version
@@ -1093,6 +1094,9 @@ async function renderProducts() {
     return;
   }
 
+  const [sizeResult,priceResult]=await Promise.all([pizzaSizesApi.listAll(currentStoreId),productSizePricesApi.listByStore(currentStoreId)]);
+  const catalogCheckFailed=!!(sizeResult.error||priceResult.error);
+  const hasValidPrice=p=>(priceResult.data||[]).some(v=>v.product_id===p.id&&Number.isFinite(Number(v.price))&&Number(v.price)>0&&(sizeResult.data||[]).some(s=>s.id===v.size_id&&s.is_active));
   // Ordena por codigo se existir
   let filtered = (data || []).slice().sort((a,b)=> (a.codigo||9999) - (b.codigo||9999) || a.display_order - b.display_order);
   if (selectedCat) filtered = filtered.filter(p => p.category_id === selectedCat);
@@ -1116,7 +1120,7 @@ async function renderProducts() {
         <div class="item-main">
           ${prod.image_url ? `<img src="${prod.image_url}" class="item-thumb" alt="${prod.name}" />` : ''}
           <div>
-            <div class="item-info-title"><span style="color:var(--primary); font-weight:800; margin-right:0.35rem;">#${codigoStr}</span> ${prod.name} ${!prod.available ? '<span class="badge badge-closed">Pausado</span>' : ''}${featuredBadge}</div>
+            <div class="item-info-title"><span style="color:var(--primary); font-weight:800; margin-right:0.35rem;">#${codigoStr}</span> ${prod.name} ${prod.is_pizza&&(catalogCheckFailed||!hasValidPrice(prod))?'<span class="badge badge-closed">'+(catalogCheckFailed?'Preços não verificados':'Sem tamanho ativo com preço — revisar cadastro')+'</span>':''} ${!prod.available ? '<span class="badge badge-closed">Pausado</span>' : ''}${featuredBadge}</div>
             <div class="item-info-meta">
               ${catName} •
               <strong style="color: var(--secondary);">${formatCurrency(prod.base_price)}</strong>
@@ -1337,6 +1341,16 @@ document.getElementById('productForm').addEventListener('submit', async (e) => {
   const fileInput = document.getElementById('prodImageInput');
   const currentUrl = document.getElementById('prodImageCurrentUrl').value;
 
+  const isPizza=document.getElementById('prodIsPizzaInput').checked;
+  if(isPizza&&document.getElementById('prodSizePricesFields').dataset.loaded!=='true'){
+    document.getElementById('prodSizePricesError').textContent='Não foi possível carregar os tamanhos e preços. Reabra o produto antes de salvar.';return;
+  }
+  const fields=[...document.querySelectorAll('#prodSizePricesFields input[data-size-id]')];
+  const validation=validateProductPrices(isPizza,document.getElementById('prodAvailableInput').checked,fields.map(f=>({id:f.dataset.sizeId,active:f.dataset.active==='true',value:f.value})));
+  fields.forEach(f=>{const error=validation.errors[f.dataset.sizeId]||'';f.setCustomValidity(error);document.getElementById('price-error-'+f.dataset.sizeId).textContent=error;f.setAttribute('aria-invalid',String(!!error));});
+  document.getElementById('prodSizePricesError').textContent=validation.errors._sizes||'';
+  if(Object.keys(validation.errors).length){fields.find(f=>validation.errors[f.dataset.sizeId])?.focus();return;}
+
   // Upload com compressão se houver arquivo novo
   let imageUrl = currentUrl || '';
   if (fileInput.files?.[0]) {
@@ -1364,7 +1378,6 @@ document.getElementById('productForm').addEventListener('submit', async (e) => {
     return;
   }
 
-  const isPizza = document.getElementById('prodIsPizzaInput').checked;
   let basePriceVal = parseCurrency(document.getElementById('prodPriceInput').value) || 0;
   // Valida limite e ordem única do carrossel (5 itens, ordem 1..5 sem repetir)
   const wantFeatured = document.getElementById('prodIsFeaturedInput').checked;
@@ -1399,73 +1412,14 @@ document.getElementById('productForm').addEventListener('submit', async (e) => {
   };
 
   showLoading(true);
-  let error;
-  async function trySave(data) {
-    if (id) return await productsApi.update(id, data);
-    return await productsApi.create(currentStoreId, data);
-  }
-  let result = await trySave(productData);
-  error = result.error;
-  // Fallback se colunas codigo / is_featured ainda não existem no Supabase (cache de schema)
-  let usedFallback = false;
-  if (error && error.message && (error.message.includes('codigo') || error.message.includes('is_featured') || error.message.includes('featured_order'))) {
-    console.warn('Coluna nova ausente, tentando sem campos novos...', error.message);
-    if (error.message.includes('is_featured') || error.message.includes('featured_order')) {
-      showToast('⚠️ Rode fix-carousel.sql no Supabase para ativar o carrossel', 'error');
-    }
-    const { codigo, is_featured, featured_order, ...withoutNew } = productData;
-    // tenta sem codigo primeiro, depois sem featured
-    if (error.message.includes('codigo')) {
-      const { is_featured: _f, featured_order: _fo, ...rest } = withoutNew;
-      result = await trySave(rest);
-    } else {
-      result = await trySave(withoutNew);
-    }
-    error = result.error;
-    usedFallback = !error;
-    if (!error && (error?.message?.includes('is_featured') || productData.is_featured)) {
-      // Se salvou sem featured mas queria, avisa
-      if (productData.is_featured) showToast('⚠️ Carrossel não salvo — execute fix-carousel.sql', 'info');
-    }
-  }
-  // Salva preços por tamanho se pizza
-  if (!error && isPizza) {
-    const prodId = result.data?.id || id;
-    const inputs = document.querySelectorAll('#prodSizePricesFields input[data-size-id]');
-    let minPrice = null;
-    for (const inp of inputs) {
-      const sizeId = inp.dataset.sizeId;
-      const val = inp.value.trim();
-      if (val !== '' && val !== '0,00') {
-        const price = parseCurrency(val);
-        if (!isNaN(price) && price>0) {
-          await productSizePricesApi.upsert(prodId, sizeId, price);
-          if (minPrice === null || price < minPrice) minPrice = price;
-        } else {
-          await supabase.from('product_size_prices').delete().eq('product_id', prodId).eq('size_id', sizeId);
-        }
-      } else {
-        await supabase.from('product_size_prices').delete().eq('product_id', prodId).eq('size_id', sizeId);
-      }
-    }
-    if (minPrice !== null) {
-      await productsApi.update(prodId, { base_price: minPrice });
-    }
-  }
-  showLoading(false);
-
-  if (error) {
-    if (error.message && error.message.includes('duplicate')) {
-      showToast(`Código ${String(codigoVal).padStart(3,'0')} já existe nesta loja`, 'error');
-    } else {
-      showToast('Erro: ' + error.message, 'error');
-    }
-  } else {
-    closeProductModal();
-    renderProducts();
-    if (usedFallback) showToast('⚠️ Salvo sem código - rode fix-codigo-migration.sql no Supabase', 'info');
-    else showToast('✅ Produto salvo!', 'success');
-  }
+  try {
+    const {error}=await supabase.rpc('save_product_with_prices',{p_store_id:currentStoreId,p_product_id:id||null,p_product:productData,p_prices:validation.prices});
+    if(error)throw error;
+    closeProductModal();await renderProducts();showToast('✅ Produto e preços salvos!','success');
+  } catch(error){
+    document.getElementById('prodSizePricesError').textContent='Não foi possível salvar: '+error.message;
+    showToast('Não foi possível salvar: '+error.message,'error');
+  } finally {showLoading(false);}
 });
 
 async function deleteProduct(prodId) {
@@ -1487,13 +1441,56 @@ async function deleteProduct(prodId) {
 // PEDIDOS
 // ============================================
 
+// Filtro de período: hoje (padrão), dia, mês, ano ou todos.
+function getOrderPeriodRange() {
+  const period = document.getElementById('orderPeriodFilter')?.value || 'today';
+  const dayStart = (d) => { const s = new Date(d); s.setHours(0, 0, 0, 0); return s.toISOString(); };
+  const dayEnd = (d) => { const e = new Date(d); e.setHours(23, 59, 59, 999); return e.toISOString(); };
+
+  if (period === 'all') return {};
+  if (period === 'day') {
+    const v = document.getElementById('orderDateFilter')?.value;
+    if (!v) return {};
+    const base = new Date(v + 'T12:00:00');
+    return { startDate: dayStart(base), endDate: dayEnd(base) };
+  }
+  if (period === 'month') {
+    const v = document.getElementById('orderMonthFilter')?.value; // yyyy-mm
+    const base = v ? new Date(v + '-01T12:00:00') : new Date();
+    const start = new Date(base.getFullYear(), base.getMonth(), 1);
+    const end = new Date(base.getFullYear(), base.getMonth() + 1, 0, 23, 59, 59, 999);
+    return { startDate: start.toISOString(), endDate: end.toISOString() };
+  }
+  if (period === 'year') {
+    const input = document.getElementById('orderYearFilter');
+    const y = parseInt(input?.value, 10) || new Date().getFullYear();
+    return { startDate: new Date(y, 0, 1).toISOString(), endDate: new Date(y, 11, 31, 23, 59, 59, 999).toISOString() };
+  }
+  // today (padrão)
+  const now = new Date();
+  return { startDate: dayStart(now), endDate: dayEnd(now) };
+}
+
+function syncOrderPeriodInputs() {
+  const period = document.getElementById('orderPeriodFilter')?.value || 'today';
+  const dateEl = document.getElementById('orderDateFilter');
+  const monthEl = document.getElementById('orderMonthFilter');
+  const yearEl = document.getElementById('orderYearFilter');
+  if (dateEl) dateEl.style.display = period === 'day' ? '' : 'none';
+  if (monthEl) monthEl.style.display = period === 'month' ? '' : 'none';
+  if (yearEl) yearEl.style.display = period === 'year' ? '' : 'none';
+}
+
 async function renderOrders() {
   const container = document.getElementById('ordersListContainer');
   const statusFilter = document.getElementById('orderStatusFilter').value;
+  const { startDate, endDate } = getOrderPeriodRange();
 
   const { data, error } = await ordersApi.list(currentStoreId, {
     status: statusFilter || undefined,
-    limit: 50
+    startDate: startDate || undefined,
+    endDate: endDate || undefined,
+    limit: 200
   });
 
   if (error) {
@@ -1609,6 +1606,11 @@ async function renderOrders() {
 }
 
 document.getElementById('orderStatusFilter').addEventListener('change', renderOrders);
+document.getElementById('orderPeriodFilter').addEventListener('change', () => { syncOrderPeriodInputs(); renderOrders(); });
+document.getElementById('orderDateFilter').addEventListener('change', renderOrders);
+document.getElementById('orderMonthFilter').addEventListener('change', renderOrders);
+document.getElementById('orderYearFilter').addEventListener('change', renderOrders);
+syncOrderPeriodInputs();
 
 function startOrdersRealtime() {
   if (ordersSubscription) ordersSubscription.unsubscribe();
@@ -2208,20 +2210,28 @@ document.getElementById('pizzaSizeForm')?.addEventListener('submit', async (e)=>
 // Produto: preços por tamanho
 async function renderProdSizePrices(productId){
   const container=document.getElementById('prodSizePricesFields');
-  const { data: sizes } = await pizzaSizesApi.listAll(currentStoreId);
-  if(!sizes?.length){ container.innerHTML=window.safeHTML('<p style="font-size:0.8rem; color:var(--text-muted);">Cadastre tamanhos em Tamanhos Pizza primeiro.</p>'); return; }
+  container.dataset.loaded='false';container.textContent='';
+  document.getElementById('prodSizePricesError').textContent='';
+  const {data:sizes,error:sizeError}=await pizzaSizesApi.listAll(currentStoreId);
+  if(sizeError){document.getElementById('prodSizePricesError').textContent='Falha ao carregar tamanhos. Reabra o produto.';return;}
   let pricesMap={};
   if(productId){
-    const { data: prices } = await productSizePricesApi.listByProduct(productId);
-    (prices||[]).forEach(p=> pricesMap[p.size_id]=p.price);
+    const {data:prices,error}=await productSizePricesApi.listByProduct(productId);
+    if(error){document.getElementById('prodSizePricesError').textContent='Falha ao carregar preços. Reabra o produto.';return;}
+    (prices||[]).forEach(p=>pricesMap[p.size_id]=p.price);
   }
+  container.dataset.loaded='true';
+  if(!sizes?.length){container.textContent='Cadastre tamanhos em Tamanhos Pizza primeiro.';return;}
   container.innerHTML = window.safeHTML(sizes.map(s=>`
     <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.4rem;">
-      <span style="flex:1; font-size:0.85rem; font-weight:600;">${s.name} <span style="color:var(--text-muted); font-weight:400;">(${s.slices}f • ${s.max_flavors} sab)</span></span>
-      <input type="text" inputmode="decimal" placeholder="0,00" data-size-id="${s.id}" value="${pricesMap[s.id]!==undefined ? formatCurrencyInput(pricesMap[s.id]) : ''}" style="width:110px; text-align:right;" />
+      <span style="flex:1; font-size:0.85rem; font-weight:600;">${s.name} — ${s.is_active ? 'Ativo' : 'Inativo (não conta para disponibilidade)'} <span style="color:var(--text-muted); font-weight:400;">(${s.slices}f • ${s.max_flavors} sab)</span></span>
+      <input type="text" inputmode="decimal" placeholder="Não oferecido" data-active="${s.is_active}" aria-describedby="price-error-${s.id}" data-size-id="${s.id}" value="${pricesMap[s.id]!==undefined ? formatCurrencyInput(pricesMap[s.id]) : ''}" style="width:110px; text-align:right;" />
     </div>
   `).join(''));
-  container.querySelectorAll('input[data-size-id]').forEach(inp=> attachCurrencyMask(inp));
+  container.querySelectorAll('input[data-size-id]').forEach(inp=>{
+    const message=document.createElement('small');message.id='price-error-'+inp.dataset.sizeId;message.setAttribute('role','alert');message.style.color='var(--status-closed)';inp.parentElement.after(message);
+    inp.addEventListener('input',()=>{inp.setCustomValidity('');inp.removeAttribute('aria-invalid');message.textContent='';});
+  });
 }
 
 // ============================================

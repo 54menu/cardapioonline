@@ -383,6 +383,16 @@
                 <option value="delivered">🏁 Entregue</option>
                 <option value="cancelled">❌ Cancelado</option>
               </select>
+              <select id="orderPeriodFilter" class="btn btn-secondary btn-sm" style="padding: 0.5rem 1rem;">
+                <option value="today" selected>📅 Hoje</option>
+                <option value="day">📅 Dia específico</option>
+                <option value="month">🗓️ Este mês / Mês</option>
+                <option value="year">📆 Este ano / Ano</option>
+                <option value="all">♾️ Todos</option>
+              </select>
+              <input type="date" id="orderDateFilter" class="btn btn-secondary btn-sm" style="padding: 0.5rem 1rem; display: none;" />
+              <input type="month" id="orderMonthFilter" class="btn btn-secondary btn-sm" style="padding: 0.5rem 1rem; display: none;" />
+              <input type="number" id="orderYearFilter" class="btn btn-secondary btn-sm" style="padding: 0.5rem 1rem; display: none; width: 7rem;" min="2020" max="2100" placeholder="Ano" />
             </div>
             <div id="ordersListContainer"></div>
           </div>
@@ -678,7 +688,7 @@
 
           <div id="prodSizePricesContainer" style="display:none; margin-bottom: 1rem; background: var(--bg-input); padding: 0.85rem; border-radius: var(--radius-md); border: 1px solid var(--border);">
             <div class="form-label" style="margin-bottom: 0.5rem;">Preços por Tamanho (pizza)</div>
-            <div id="prodSizePricesFields"></div>
+            <div id="prodSizePricesFields"></div><p id="prodSizePricesError" role="alert" style="color:var(--status-closed);"></p>
             <div class="form-help">Defina o preço para cada tamanho. Deixe vazio para indisponível naquele tamanho.</div>
           </div>
 
