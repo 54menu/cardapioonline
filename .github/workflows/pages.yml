@@ -1,19 +1,26 @@
 name: Deploy to GitHub Pages
 
+# Manual only: pushing review commits must not publish the whole catalog early.
 on:
-  push:
-    branches: ['main']
   workflow_dispatch:
+    inputs:
+      phase:
+        description: Reviewed release phase
+        required: true
+        type: choice
+        options: [admin-only, complete]
+      public_base_ref:
+        description: Exact commit of the public build verified before maintenance
+        required: true
+        type: string
 
 permissions:
   contents: read
   pages: write
   id-token: write
-
 concurrency:
-  group: 'pages'
+  group: pages
   cancel-in-progress: false
-
 jobs:
   deploy:
     environment:
@@ -21,30 +28,28 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
           cache: npm
       - run: npm ci
       - run: npm test
-      - run: npm run build
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Build reviewed phase
+        env:
+          RELEASE_PHASE: ${{ inputs.phase }}
+          PUBLIC_BASE_REF: ${{ inputs.public_base_ref }}
+        run: node scripts/build-achado4.mjs "$RELEASE_PHASE" "$PUBLIC_BASE_REF"
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
         with:
-          path: 'dist'
+          path: dist
           name: github-pages-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Wait for artifact metadata
         run: sleep 15
-
-      - name: Deploy to GitHub Pages
-        id: deployment
+      - id: deployment
         uses: actions/deploy-pages@v4
         with:
           artifact_name: github-pages-${{ github.run_id }}-${{ github.run_attempt }}
