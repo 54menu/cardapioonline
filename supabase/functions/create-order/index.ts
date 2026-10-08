@@ -9,6 +9,9 @@ Deno.serve(async req=>{
   const {store_id,request_id,order}=JSON.parse(text);
   if(!/^[a-f0-9-]{36}$/i.test(store_id||'')||!/^[a-f0-9-]{36}$/i.test(request_id||'')) return response({error:'Pedido inválido.'},400);
   const db=createClient(required('SUPABASE_URL'),required('SUPABASE_SERVICE_ROLE_KEY'));
+  const {data:eligibility,error:eligibilityError}=await db.rpc('public_store_status',{p_store_id:store_id});
+  if(eligibilityError) return response({error:'Não foi possível verificar a disponibilidade da loja.'},503);
+  if(!['trial','active'].includes(eligibility)) return response({error:'Loja temporariamente indisponível.'},403);
   const results=await Promise.all([
    db.from('stores').select('*').eq('id',store_id).eq('status','open').single(),
    db.from('store_settings').select('*').eq('store_id',store_id).maybeSingle(),

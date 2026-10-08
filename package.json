@@ -22,7 +22,14 @@
     "dompurify": "3.4.16"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
     "acorn": "8.18.0",
-    "jsdom": "30.1.1"
+    "embedded-postgres": "17.10.0-beta.17",
+    "jsdom": "30.1.1",
+    "pg": "8.23.1"
+  },
+  "allowScripts": {
+    "@embedded-postgres/windows-x64@17.10.0-beta.17": true,
+    "@embedded-postgres/linux-x64@17.10.0-beta.17": true
   }
 }

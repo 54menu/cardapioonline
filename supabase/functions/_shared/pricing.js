@@ -1,11 +1,24 @@
-const money = value => Math.round(Number(value) * 100);
+const money = value => {
+ if(typeof value!=='number'||!Number.isFinite(value)||value<0) fail('Preço inválido no catálogo.');
+ const cents=Math.round(value*100);
+ if(!Number.isSafeInteger(cents)) fail('Preço inválido no catálogo.');
+ return cents;
+};
 const fail = message => { throw new Error(message); };
-const quantity = value => Number.isInteger(Number(value)) && Number(value)>0 && Number(value)<=50 ? Number(value) : fail('Quantidade inválida.');
+const quantity = value => typeof value==='number' && Number.isInteger(value) && value>0 && value<=50 ? value : fail('Quantidade inválida.');
 export function priceOrder(input, catalog) {
  const {store,settings={},products=[],sizes=[],prices=[],addons=[],offers=[],neighborhoods=[]}=catalog;
  if(!Array.isArray(input.items)||!input.items.length||input.items.length>50) fail('Sacola inválida.');
  const product=id=>products.find(p=>p.id===id&&p.available!==false)||fail('Produto indisponível.');
- const price=(p,size)=>size ? money(prices.find(v=>v.product_id===p.id&&v.size_id===size.id)?.price ?? p.base_price) : money(p.base_price);
+ const price=(p,size)=>{
+  if(!p.is_pizza) return money(p.base_price);
+  if(!size) fail('Selecione um tamanho válido para a pizza.');
+  const row=prices.find(v=>v.product_id===p.id&&v.size_id===size.id);
+  if(!row) fail('Pizza indisponível neste tamanho.');
+  const cents=money(row.price);
+  if(cents<=0) fail('Preço inválido para o tamanho da pizza.');
+  return cents;
+ };
  const mode=settings.fraction_pricing_mode==='proportional'?'proportional':'max';
  const fractionGroups=new Map();
  const offerCounts=new Map();
@@ -33,8 +46,8 @@ export function priceOrder(input, catalog) {
   }
   const p=product(raw.productId);
   const size=raw.size?.id?sizes.find(s=>s.id===raw.size.id&&s.is_active!==false):null;
-  if(raw.size?.id&&!size) fail('Tamanho indisponível.');
-  if(size&&!p.is_pizza) fail('Tamanho inválido para o produto.');
+  if(p.is_pizza&&!size) fail('Selecione um tamanho válido para a pizza.');
+  if(!p.is_pizza&&raw.size!=null) fail('Tamanho inválido para o produto.');
   const flavorIds=raw.flavorIds||[];
   if(!Array.isArray(flavorIds)||flavorIds.length>3||flavorIds.length>(size?.max_flavors||1)-1) fail('Sabores inválidos.');
   const flavors=flavorIds.map(id=>{const f=product(id);if(!f.is_pizza) fail('Sabor inválido.');return f;});
@@ -50,7 +63,8 @@ export function priceOrder(input, catalog) {
   if(raw.extras?.length&&!p.has_extras) fail('Adicionais não permitidos.');
   if(!Array.isArray(raw.extras||[])||(raw.extras||[]).length>30||new Set((raw.extras||[]).map(x=>x.id)).size!==(raw.extras||[]).length) fail('Adicionais inválidos.');
   const crust=addon(raw.crust,'crust');const extras=(raw.extras||[]).map(a=>addon(a,'extra'));
-  const fraction=Number(raw.fractionValue??1);
+  const fraction=raw.fractionValue===undefined?1:raw.fractionValue;
+  if(typeof fraction!=='number'||![1,0.5,1/3,0.25].includes(fraction)) fail('Fração inválida.');
   const denominator=Math.round(1/fraction);
   if(![1,2,3,4].includes(denominator)||Math.abs(1/denominator-fraction)>0.00001) fail('Fração inválida.');
   if(denominator>1&&(!p.is_pizza||!size||denominator>size.max_flavors||flavors.length)) fail('Fração não permitida.');

@@ -16,21 +16,6 @@ function setupProductModal() {
   let quantity = 1;
   let observation = '';
 
-  function getPizzaSizes() {
-    const fromApp = window.appState?.pizzaSizes || [];
-    const fromStorage = window.storage?.getPizzaSizes?.() || [];
-    const list = (fromApp.length ? fromApp : fromStorage).filter(s=> s.is_active!==false).sort((a,b)=>(a.display_order||0)-(b.display_order||0));
-    return list;
-  }
-  function getPriceForProductSize(product, size) {
-    if (!size) return Number(product.price || product.base_price || 0);
-    // tenta product_size_prices
-    const allPrices = window.appState?.productSizePrices || window.storage?.getProductSizePrices?.() || [];
-    const found = allPrices.find(p=> p.product_id===product.id && p.size_id===size.id);
-    if (found) return Number(found.price);
-    // fallback para product.price (ou base_price) se não houver preço por tamanho
-    return Number(product.price || product.base_price || 0);
-  }
 
   function getFractionOptionsForSize(size){
     if(!size || !size.max_flavors || size.max_flavors<=1) return [{ label:'Inteira', value:1, numerator:1, denominator:1 }];
@@ -69,7 +54,11 @@ function setupProductModal() {
     const crustGroup = addonGroups.crusts;
     const extraGroup = addonGroups.extras;
     const cs = window.customerService;
-    const pizzaSizes = getPizzaSizes();
+    const pizzaSizes = product.is_pizza ? window.pizzaCatalog.sizes(product).map(r=>r.size) : [];
+    if(product.is_pizza&&!pizzaSizes.length){
+      modalContent.innerHTML=window.safeHTML('<p role="alert">Produto indisponível: preço por tamanho não configurado.</p><button id="closeUnavailableProduct">Fechar</button>');
+      modalContent.querySelector('#closeUnavailableProduct').onclick=closeModal;modalBackdrop.classList.add('active');return;
+    }
     const usePizzaSizes = product.is_pizza && pizzaSizes.length > 0;
     const sizeGroup = addonGroups.sizes; // fallback legado
 
@@ -269,6 +258,7 @@ function setupProductModal() {
   }
 
   function buildFlavorSelectors(size, allPizzas, cs) {
+    allPizzas=allPizzas.filter(p=>Number.isFinite(getPriceForProductSize(p,size)));
     if (!size || size.max_flavors <= 1) return '<p style="font-size:0.8rem; color:var(--text-muted);">Este tamanho não permite divisão.</p>';
     let html = '<p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.5rem;">Selecione os sabores adicionais (ingredientes visíveis):</p>';
     for (let i=1; i < size.max_flavors; i++) {
@@ -290,12 +280,9 @@ function setupProductModal() {
     return html;
   }
 
-  function getPriceForProductSize(product, size) {
-    if (!size) return Number(product.price || product.base_price || 0);
-    const allPrices = window.appState?.productSizePrices || window.storage?.getProductSizePrices?.() || [];
-    const found = allPrices.find(p=> p.product_id===product.id && p.size_id===size.id);
-    if (found) return Number(found.price);
-    return Number(product.price || product.base_price || 0);
+  function getPriceForProductSize(product,size){
+    if(!product.is_pizza)return Number(product.price||product.base_price||0);
+    return window.pizzaCatalog.sizes(product).find(r=>r.size.id===size?.id)?.price ?? NaN;
   }
 
   function closeModal() {
@@ -573,6 +560,7 @@ function setupProductModal() {
 
     const btnAdd = modalContent.querySelector('#btnConfirmAddToCart');
     btnAdd.addEventListener('click', () => {
+      if(product.is_pizza&&(!Number.isFinite(getPriceForProductSize(product,selectedSize))||selectedFlavors.some(f=>!Number.isFinite(getPriceForProductSize(f,selectedSize))))){window.showToast?.('Tamanho indisponível para um dos sabores.','error');return;}
       observation = obsInput ? obsInput.value : '';
       // Fluxo fracionado
       if(selectedFraction && selectedFraction.value < 1){

@@ -11,12 +11,8 @@ function getCarouselProducts(){
 }
 
 function getCarouselDisplayPrice(product){
-  if (!product.is_pizza) return Number(product.price||product.base_price||0);
-  const sizes = window.appState?.pizzaSizes || window.storage?.getPizzaSizes?.() || [];
-  const prices = window.appState?.productSizePrices || window.storage?.getProductSizePrices?.(product.id) || [];
-  const all = Array.isArray(prices) ? prices.filter(p=> p.product_id===product.id) : [];
-  if (all.length) return Math.min(...all.map(p=>Number(p.price)));
-  return Number(product.price||product.base_price||0);
+ if(!product.is_pizza)return Number(product.price||product.base_price||0);
+ const rows=window.pizzaCatalog.sizes(product);return rows.length?Math.min(...rows.map(r=>r.price)):null;
 }
 
 function renderCarousel(container, onSelectProduct){
@@ -53,7 +49,7 @@ function renderCarousel(container, onSelectProduct){
                 <h3 class="carousel-card-title" title="${product.name}">${product.name}</h3>
                 ${shortDesc ? `<p class="carousel-card-desc">${shortDesc}</p>` : ''}
                 <div class="carousel-card-footer">
-                  <span class="carousel-card-price">${cs ? cs.formatCurrency(price) : 'R$ '+ price.toFixed(2)}</span>
+                  <span class="carousel-card-price">${price===null?'Indisponível — preço não configurado':cs ? cs.formatCurrency(price) : 'R$ '+ price.toFixed(2)}</span>
                   <span class="carousel-card-cta">Ver opções →</span>
                 </div>
               </div>
@@ -111,7 +107,7 @@ function renderCarousel(container, onSelectProduct){
     card.addEventListener('click', ()=>{
       const productId = card.dataset.productId;
       const product = (window.appState?.products || window.storage?.getProducts?.() || []).find(p=> p.id===productId);
-      if (product && onSelectProduct) onSelectProduct(product);
+      if (product && (!product.is_pizza||window.pizzaCatalog.sizes(product).length) && onSelectProduct) onSelectProduct(product);
     });
   });
 }

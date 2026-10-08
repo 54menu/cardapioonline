@@ -1,27 +1,19 @@
-/**
- * Componente: Renderização dos Produtos e Seções do Cardápio
- * Compatível com file:// e http://
- */
-
+// A pizza offers only active sizes with a valid persisted association.
+window.pizzaCatalog={
+ sizes(product){
+  const sizes=window.appState?.pizzaSizes||window.storage?.getPizzaSizes?.()||[];
+  const prices=window.appState?.productSizePrices||window.storage?.getProductSizePrices?.(product.id)||[];
+  return sizes.filter(s=>s.is_active!==false).sort((a,b)=>(a.display_order||0)-(b.display_order||0)).flatMap(s=>{
+   const row=prices.find(p=>p.product_id===product.id&&p.size_id===s.id);
+   return row&&typeof row.price==='number'&&Number.isFinite(row.price)&&row.price>0?[{size:s,price:row.price}]:[];
+  });
+ }
+};
 function getDisplayPrice(product){
-  if (!product.is_pizza) return Number(product.price||0);
-  const sizes = window.appState?.pizzaSizes || window.storage?.getPizzaSizes?.() || [];
-  if (!sizes.length) return Number(product.price||0);
-  const prices = window.appState?.productSizePrices || window.storage?.getProductSizePrices?.(product.id) || [];
-  const myPrices = Array.isArray(prices) ? prices.filter(p=> p.product_id===product.id) : [];
-  if (myPrices.length) return Math.min(...myPrices.map(p=>Number(p.price)));
-  return Number(product.price||0);
+ if(!product.is_pizza)return Number(product.price||0);
+ const rows=window.pizzaCatalog.sizes(product);return rows.length?Math.min(...rows.map(r=>r.price)):null;
 }
-function getSizePrices(product){
-  if (!product.is_pizza) return [];
-  const sizes = (window.appState?.pizzaSizes || window.storage?.getPizzaSizes?.() || []).filter(s=>s.is_active!==false).sort((a,b)=>(a.display_order||0)-(b.display_order||0));
-  if (!sizes.length) return [];
-  const allPrices = window.appState?.productSizePrices || [];
-  return sizes.map(s=>{
-    const found = allPrices.find(p=> p.product_id===product.id && p.size_id===s.id);
-    return found ? { size: s, price: Number(found.price) } : null;
-  }).filter(Boolean);
-}
+function getSizePrices(product){return product.is_pizza?window.pizzaCatalog.sizes(product):[];}
 function renderProductSections(container, searchQuery = '', onSelectProduct) {
   // compat: searchQuery pode ser string ou objeto {query, sizeId, priceRange}
   let filter = { query: '', sizeId: '', priceRange: '' };
@@ -44,7 +36,7 @@ function renderProductSections(container, searchQuery = '', onSelectProduct) {
     filteredProducts = filteredProducts.filter(p => {
       if (!p.is_pizza) return false;
       const allPrices = window.appState?.productSizePrices || [];
-      return allPrices.some(pr=> pr.product_id===p.id && pr.size_id===filter.sizeId);
+      return getSizePrices(p).some(pr=>pr.size.id===filter.sizeId);
     });
   }
   if (filter.priceRange) {
@@ -53,7 +45,7 @@ function renderProductSections(container, searchQuery = '', onSelectProduct) {
     filteredProducts = filteredProducts.filter(p => {
       if (p.is_pizza) {
         const allPrices = window.appState?.productSizePrices || [];
-        const myPrices = allPrices.filter(pr=> pr.product_id===p.id);
+        const myPrices = getSizePrices(p).map(r=>({size_id:r.size.id,price:r.price}));
         if (filter.sizeId) {
           const found = myPrices.find(pr=> pr.size_id===filter.sizeId);
           if (!found) return false;
@@ -63,7 +55,7 @@ function renderProductSections(container, searchQuery = '', onSelectProduct) {
           // sem tamanho selecionado: verifica se ALGUM tamanho está na faixa
           if (myPrices.length) return myPrices.some(pr=> { const v=Number(pr.price); return v>=min && v<=max; });
           const price = getDisplayPrice(p);
-          return price >= min && price <= max;
+          return price !== null && price >= min && price <= max;
         }
       } else {
         const price = getDisplayPrice(p);
@@ -105,7 +97,7 @@ function renderProductSections(container, searchQuery = '', onSelectProduct) {
                       if(sps.length){
                         return `<div style="display:flex; gap:0.35rem; flex-wrap:wrap; align-items:center;">${sps.map(sp=>`<span style="font-size:0.78rem; font-weight:700; white-space:nowrap;">${sp.size.name.split('(')[0].trim()} ${cs?cs.formatCurrency(sp.price):'R$ '+sp.price}</span>`).join('<span style="color:var(--text-muted); font-size:0.7rem;">•</span>')}</div>`;
                       } else {
-                        return `<span class="product-price">${cs ? cs.formatCurrency(getDisplayPrice(product)) : 'R$ ' + getDisplayPrice(product)}</span>`;
+                        return `<span class="product-price">${getDisplayPrice(product)===null?'Indisponível — preço não configurado':cs ? cs.formatCurrency(getDisplayPrice(product)) : 'R$ ' + getDisplayPrice(product)}</span>`;
                       }
                     })()}
                   </div>
@@ -126,7 +118,7 @@ function renderProductSections(container, searchQuery = '', onSelectProduct) {
     card.addEventListener('click', () => {
       const productId = card.dataset.productId;
       const product = window.appState.products.find(p => p.id === productId);
-      if (product && onSelectProduct) {
+      if (product && (!product.is_pizza||getSizePrices(product).length) && onSelectProduct) {
         onSelectProduct(product);
       }
     });

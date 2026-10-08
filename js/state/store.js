@@ -381,16 +381,20 @@ class StoreState {
       fraction = null // novo: {value, numerator, denominator, label}
     } = itemPayload;
 
+    const catalogPrice=p=>{
+      if(!p.is_pizza)return Number(p.price);
+      const active=this.pizzaSizes.some(s=>s.id===size?.id&&s.is_active!==false);
+      const row=this.productSizePrices.find(v=>v.product_id===p.id&&v.size_id===size?.id);
+      if(!active||!row||typeof row.price!=='number'||!Number.isFinite(row.price)||row.price<=0)throw new Error('Tamanho sem preço válido para esta pizza.');
+      return row.price;
+    };
+    catalogPrice(product);
+    for(const flavor of (_allFlavors?.length?_allFlavors:secondFlavor?[secondFlavor]:[]))catalogPrice(flavor);
     // ----- FLUXO FRACIONADO NOVO -----
     if(fraction && fraction.value != null && fraction.value < 1){
       const fv = Number(fraction.value);
       const label = fraction.label || (fv===0.5?'½': fv===0.25?'¼': String(fv));
-      let basePrice = Number(product.price);
-      if (size && product.id) {
-        const allPrices = this.productSizePrices || [];
-        const found = allPrices.find(p=> p.product_id===product.id && p.size_id===size.id);
-        if (found) basePrice = Number(found.price);
-      }
+      let basePrice = catalogPrice(product);
       let unitPrice = basePrice;
       if (size && typeof size.price_diff === 'number' && (!this.pizzaSizes || !this.pizzaSizes.length)) unitPrice += size.price_diff;
       if (crust && crust.price) unitPrice += Number(crust.price);
@@ -425,21 +429,14 @@ class StoreState {
 
     // ----- FLUXO ANTIGO COMBINADO (mantido para retrocompatibilidade) -----
     // Determina preço base considerando tamanho (product_size_prices)
-    let basePrice = Number(product.price);
-    if (size && product.id) {
-      const allPrices = this.productSizePrices || [];
-      const found = allPrices.find(p=> p.product_id===product.id && p.size_id===size.id);
-      if (found) basePrice = Number(found.price);
-    }
+    let basePrice = catalogPrice(product);
     let displayName = product.name;
 
     // Suporte a 2-4 sabores: usa _allFlavors se fornecido, senão secondFlavor
     const allFlavors = _allFlavors && _allFlavors.length ? _allFlavors : (secondFlavor ? [secondFlavor] : []);
     if (allFlavors.length) {
       const prices = [basePrice, ...allFlavors.map(f=>{
-        const allPrices = this.productSizePrices || [];
-        const fp = size ? allPrices.find(p=> p.product_id===f.id && p.size_id===size.id) : null;
-        return fp ? Number(fp.price) : Number(f.price);
+        return catalogPrice(f);
       })];
       basePrice = Math.max(...prices);
       const names = [product.name, ...allFlavors.map(f=> f.name)];
