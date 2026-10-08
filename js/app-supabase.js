@@ -49,11 +49,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       if(statusError) throw statusError;
       const sub={status};
       if (sub && (sub.status === 'blocked' || sub.status === 'past_due' || sub.status === 'canceled')) {
-        const due = sub.current_period_end ? new Date(sub.current_period_end+'T12:00:00').toLocaleDateString('pt-BR') : '';
-        const msg = sub.status === 'blocked'
-          ? `<h1>🚫 Loja temporariamente indisponível</h1><p>Assinatura vencida em ${due}. O lojista regulariza o PIX dia 01 (vence dia 06).</p>`
-          : `<h1>⏳ Aguardando pagamento</h1><p>Vencimento dia 01 — carência até dia 06. PIX pendente.</p>`;
-        document.getElementById('menuContainer').innerHTML = window.safeHTML(`<div class="store-closed">${msg}<p style="font-size:0.85rem; margin-top:1rem;">Entre em contato com a loja.</p></div>`);
+        const msg = `<h1>🚫 Loja temporariamente indisponível</h1>`;
+        document.getElementById('menuContainer').innerHTML = window.safeHTML(`<div class="store-closed">${msg}</div>`);
         document.getElementById('floatingCartBar').style.display='none';
         loadingScreen.classList.add('hidden');
         return;
