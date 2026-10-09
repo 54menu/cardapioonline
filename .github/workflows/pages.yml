@@ -1,9 +1,7 @@
 name: Deploy to GitHub Pages
 
-# Deploy automático na main + manual com fase revisada.
+# Manual only: pushing review commits must not publish the whole catalog early.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       phase:
@@ -41,8 +39,8 @@ jobs:
       - run: npm test
       - name: Build reviewed phase
         env:
-          RELEASE_PHASE: ${{ inputs.phase || 'complete' }}
-          PUBLIC_BASE_REF: ${{ inputs.public_base_ref || github.sha }}
+          RELEASE_PHASE: ${{ inputs.phase }}
+          PUBLIC_BASE_REF: ${{ inputs.public_base_ref }}
         run: node scripts/build-achado4.mjs "$RELEASE_PHASE" "$PUBLIC_BASE_REF"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
