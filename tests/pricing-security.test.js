@@ -124,4 +124,72 @@ test('fractional thirds round to exact highest price in max mode',()=>{
  const r=priceOrder(order(Array.from({length:3},()=>({...item(),fractionValue:1/3}))),c);
  assert.equal(r.total,60.01);
 });
+const freeCatalog=(max,freeCount=2,paidCount=0)=>{
+ const c=catalog();
+ c.products.push({id:'fries',name:'Fries',is_pizza:false,base_price:15,available:true,has_extras:true});
+ c.addons=[
+  ...Array.from({length:freeCount},(_,i)=>({id:'free'+i,name:'Free '+i,group_id:'molho',group_name:'Adicional Molho',group_max_free:max,price_diff:0})),
+  ...Array.from({length:paidCount},(_,i)=>({id:'paid'+i,name:'Paid '+i,group_id:'molho',group_name:'Adicional Molho',group_max_free:max,price_diff:5})),
+ ];
+ return c;
+};
+const friesOrder=(extras,total)=>({items:[{productId:'fries',quantity:1,extras}],orderType:'pickup',customer:{name:'Test fixture',phone:'5500000000000'},payment:{method:'pix'},total});
+test('free limit of 1 rejects two free extras',()=>{
+ assert.throws(()=>priceOrder(friesOrder([{id:'free0'},{id:'free1'}],15),freeCatalog(1)),/gratuitos/);
+});
+test('free limit of 1 accepts a single free extra',()=>{
+ assert.equal(priceOrder(friesOrder([{id:'free0'}],15),freeCatalog(1)).total,15);
+});
+test('paid extras do not count toward the free limit',()=>{
+ assert.equal(priceOrder(friesOrder([{id:'free0'},{id:'paid0'},{id:'paid1'}],25),freeCatalog(1,2,2)).total,25);
+});
+test('free limit of 2 accepts two free extras',()=>{
+ assert.equal(priceOrder(friesOrder([{id:'free0'},{id:'free1'}],15),freeCatalog(2)).total,15);
+});
+test('free limit of 0 rejects any free extra',()=>{
+ assert.throws(()=>priceOrder(friesOrder([{id:'free0'}],15),freeCatalog(0,1)),/gratuitos/);
+});
+test('groups without a free limit keep unlimited free extras',()=>{
+ assert.equal(priceOrder(friesOrder([{id:'free0'},{id:'free1'}],15),freeCatalog(null)).total,15);
+});
+const linkedCatalog=()=>{
+ const c=freeCatalog(5,2,1);
+ c.products.push({id:'pizzaX',name:'Pizza X',is_pizza:false,base_price:20,available:true,has_extras:true,category_id:'cat-pizza'});
+ const fries=c.products.find(p=>p.id==='fries');
+ fries.category_id='cat-entradas';
+ for(const a of c.addons) a.group_category_ids=['cat-entradas'];
+ return c;
+};
+const catOrder=(productId,extras,total)=>({items:[{productId,quantity:1,extras}],orderType:'pickup',customer:{name:'Test fixture',phone:'5500000000000'},payment:{method:'pix'},total});
+test('group linked to another category is rejected',()=>{
+ assert.throws(()=>priceOrder(catOrder('pizzaX',[{id:'free0'}],20),linkedCatalog()),/produto/);
+});
+test('group linked to the product category is accepted',()=>{
+ assert.equal(priceOrder(catOrder('fries',[{id:'free0'}],15),linkedCatalog()).total,15);
+});
+test('cumulative paid option multiplies price by quantity',()=>{
+ assert.equal(priceOrder(catOrder('fries',[{id:'paid0',quantity:3}],30),linkedCatalog()).total,30);
+});
+for(const qty of [0,11,1.5,NaN,'2']){
+ test('invalid extra quantity rejected '+String(qty),()=>{
+  assert.throws(()=>priceOrder(catOrder('fries',[{id:'paid0',quantity:qty}],15),linkedCatalog()),/uanti/);
+ });
+}
+test('free units count toward the limit',()=>{
+ const c=linkedCatalog();
+ assert.equal(priceOrder(catOrder('fries',[{id:'free0',quantity:2}],15),c).total,15);
+ assert.throws(()=>priceOrder(catOrder('fries',[{id:'free0',quantity:6}],15),c),/gratuitos/);
+});
+test('exclusive option cannot combine with another from the group',()=>{
+ const c=linkedCatalog();
+ c.addons.find(a=>a.id==='free0').cumulative=false;
+ assert.equal(priceOrder(catOrder('fries',[{id:'free0'}],15),c).total,15);
+ assert.throws(()=>priceOrder(catOrder('fries',[{id:'free0'},{id:'free1'}],15),c),/exclusivo/);
+ assert.throws(()=>priceOrder(catOrder('fries',[{id:'free1'},{id:'free0'}],15),c),/exclusivo/);
+});
+test('exclusive option rejects quantity above one',()=>{
+ const c=linkedCatalog();
+ c.addons.find(a=>a.id==='free0').cumulative=false;
+ assert.throws(()=>priceOrder(catOrder('fries',[{id:'free0',quantity:2}],15),c),/uanti/);
+});
 

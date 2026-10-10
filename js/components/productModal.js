@@ -52,7 +52,9 @@ function setupProductModal() {
     currentProduct = product;
     const addonGroups = window.appState.addonGroups || {};
     const crustGroup = addonGroups.crusts;
-    const extraGroup = addonGroups.extras;
+    const allExtraGroups = addonGroups.extraGroups || (addonGroups.extras ? [addonGroups.extras] : []);
+    // Grupo vale para o produto se não tiver vínculo ou se a categoria do produto estiver vinculada
+    const extraGroups = allExtraGroups.filter(g => !g.category_ids?.length || (product.category_id && g.category_ids.includes(product.category_id)));
     const cs = window.customerService;
     const pizzaSizes = product.is_pizza ? window.pizzaCatalog.sizes(product).map(r=>r.size) : [];
     if(product.is_pizza&&!pizzaSizes.length){
@@ -209,26 +211,36 @@ function setupProductModal() {
           </div>
         ` : ''}
 
-        <!-- Extras -->
-        ${product.has_extras && extraGroup ? `
-          <div class="addon-group">
+        <!-- Extras (um bloco por grupo aplicável à categoria do produto) -->
+        ${product.has_extras && extraGroups.length ? extraGroups.map(g => `
+          <div class="addon-group" data-extra-group="${g.id}">
             <div class="addon-group-header">
-              <span class="addon-group-title">🥓 ${extraGroup.title}</span>
-              <span class="addon-group-required">Opcional</span>
+              <span class="addon-group-title">🥓 ${g.title}</span>
+              <span class="addon-group-required">${g.type === 'single' ? (g.required ? 'Obrigatório · escolha 1' : 'Escolha 1') : (g.max_free != null ? `Máx ${g.max_free} grátis` : 'Opcional')}</span>
             </div>
+            ${g.type !== 'single' && g.max_free != null ? `<p style="font-size:0.75rem; color:var(--text-muted); margin:-0.25rem 0 0.5rem;">Limite de ${g.max_free} item(ns) sem custo neste grupo — itens pagos à parte não contam para o limite.</p>` : ''}
             <div class="addon-options-list">
-              ${extraGroup.options.map(opt => `
-                <div class="addon-option extra-option" data-extra-id="${opt.id}" data-price="${opt.price}" data-name="${opt.name}">
+              ${g.options.map(opt => `
+                <div class="addon-option extra-option" data-extra-id="${opt.id}" data-group-id="${g.id}">
                   <div class="addon-option-info">
-                    <input type="checkbox" name="extra" value="${opt.id}" style="width: auto;" />
-                    <span style="font-size: 0.88rem; font-weight: 600;">${opt.name}</span>
+                    ${g.type === 'single'
+                      ? `<input type="radio" name="extra_${g.id}" value="${opt.id}" style="width: auto;" />`
+                      : `<input type="checkbox" name="extra_${g.id}" value="${opt.id}" style="width: auto;" />`}
+                    <span style="font-size:0.88rem; font-weight:600;">${opt.name}</span>
                   </div>
-                  <span class="addon-option-price">+ ${cs ? cs.formatCurrency(opt.price) : opt.price}</span>
+                  <span style="display:flex; align-items:center; gap:0.5rem;">
+                    ${g.type !== 'single' && opt.cumulative !== false ? `<span class="extra-qty" data-qty-for="${opt.id}" style="display:none; align-items:center; gap:0.35rem;">
+                      <button type="button" class="btn-qty" data-qty-act="dec" data-qty-id="${opt.id}" data-qty-group="${g.id}" style="width:1.5rem;height:1.5rem;font-size:0.9rem;">−</button>
+                      <span class="extra-qty-n" style="min-width:1rem; text-align:center; font-weight:700;">1</span>
+                      <button type="button" class="btn-qty" data-qty-act="inc" data-qty-id="${opt.id}" data-qty-group="${g.id}" style="width:1.5rem;height:1.5rem;font-size:0.9rem;">+</button>
+                    </span>` : ''}
+                    <span class="addon-option-price">+ ${cs ? cs.formatCurrency(opt.price) : opt.price}</span>
+                  </span>
                 </div>
               `).join('')}
             </div>
           </div>
-        ` : ''}
+        `).join('') : ''}
 
         <div class="addon-group">
           <div class="addon-group-header">
@@ -251,7 +263,7 @@ function setupProductModal() {
       </div>
     `);
 
-    bindModalEvents(product, sizeGroup, crustGroup, extraGroup, allPizzas, pizzaSizes, usePizzaSizes);
+    bindModalEvents(product, sizeGroup, crustGroup, extraGroups, allPizzas, pizzaSizes, usePizzaSizes);
 
     modalBackdrop.classList.add('active');
     document.body.style.overflow = 'hidden';
@@ -290,7 +302,7 @@ function setupProductModal() {
     document.body.style.overflow = '';
   }
 
-  function bindModalEvents(product, sizeGroup, crustGroup, extraGroup, allPizzas, pizzaSizes, usePizzaSizes) {
+  function bindModalEvents(product, sizeGroup, crustGroup, extraGroups, allPizzas, pizzaSizes, usePizzaSizes) {
     const cs = window.customerService;
     const btnClose = modalContent.querySelector('#btnCloseProductModal');
     if (btnClose) btnClose.addEventListener('click', closeModal);
@@ -494,16 +506,142 @@ function setupProductModal() {
       });
     });
 
-    // Extras
-    modalContent.querySelectorAll('.extra-option').forEach(option => {
-      option.addEventListener('click', (e) => {
-        const checkbox = option.querySelector('input[type="checkbox"]');
+    // Extras: um bloco por grupo; single=radio, multiple=checkbox (+stepper se cumulativo).
+    // Regras por grupo: max_free conta unidades grátis; item não cumulativo é exclusivo no grupo.
+    const MAX_EXTRA_QTY = 10;
+    const findGroup = (gid) => extraGroups.find(g => g.id === gid);
+    const findOpt = (gid, oid) => findGroup(gid)?.options.find(o => o.id === oid);
+    const freeUnitsInGroup = (gid) => selectedExtras
+      .filter(e => e.groupId === gid && Number(e.price || 0) === 0)
+      .reduce((s, e) => s + Number(e.quantity || 1), 0);
+    const exclusiveInGroup = (gid) => selectedExtras.find(e => e.groupId === gid && e.exclusive);
+    function setRowDisabled(gid, oid, disabled) {
+      const row = modalContent.querySelector(`.extra-option[data-group-id="${gid}"][data-extra-id="${oid}"]`);
+      if (!row) return;
+      const inp = row.querySelector('input');
+      if (inp) inp.disabled = disabled;
+      row.style.opacity = disabled ? '0.45' : '';
+    }
+    function refreshGroupDisabled(gid) {
+      const g = findGroup(gid);
+      if (!g || g.type === 'single') return;
+      const locked = !!exclusiveInGroup(gid);
+      g.options.forEach(o => {
+        const sel = selectedExtras.some(e => e.groupId === gid && e.id === o.id);
+        setRowDisabled(gid, o.id, locked && !sel);
+      });
+    }
+    function qtyBadge(gid, oid) {
+      return modalContent.querySelector(`.extra-qty[data-qty-for="${oid}"]`);
+    }
+    function setQtyBadge(gid, oid, qty) {
+      const badge = qtyBadge(gid, oid);
+      if (!badge) return;
+      badge.style.display = qty > 0 ? 'inline-flex' : 'none';
+      const n = badge.querySelector('.extra-qty-n');
+      if (n) n.textContent = qty;
+    }
+    // Radios (grupos single)
+    modalContent.querySelectorAll('.extra-option input[type="radio"]').forEach(radio => {
+      const row = radio.closest('.extra-option');
+      row.addEventListener('click', (e) => {
+        if (e.target !== radio && radio.disabled) return;
+        const gid = row.dataset.groupId, oid = row.dataset.extraId;
+        const g = findGroup(gid), opt = findOpt(gid, oid);
+        if (!g || !opt) return;
+        if (Number(opt.price || 0) === 0 && g.max_free != null && 1 > g.max_free) {
+          if (window.showToast) window.showToast(`Este grupo não permite itens grátis.`, 'error');
+          return;
+        }
+        modalContent.querySelectorAll(`.extra-option[data-group-id="${gid}"]`).forEach(o => {
+          o.classList.remove('selected');
+          const r = o.querySelector('input'); if (r) r.checked = false;
+        });
+        radio.checked = true;
+        row.classList.add('selected');
+        selectedExtras = selectedExtras.filter(ee => ee.groupId !== gid);
+        selectedExtras.push({ id: opt.id, name: opt.name, price: Number(opt.price || 0), quantity: 1, groupId: gid, exclusive: opt.cumulative === false });
+        updateModalTotal();
+      });
+    });
+    // Checkboxes (grupos multiple)
+    modalContent.querySelectorAll('.extra-option input[type="checkbox"]').forEach(checkbox => {
+      const row = checkbox.closest('.extra-option');
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('[data-qty-act]')) return;
+        if (e.target !== checkbox && checkbox.disabled) return;
+        const gid = row.dataset.groupId, oid = row.dataset.extraId;
+        const g = findGroup(gid), opt = findOpt(gid, oid);
+        if (!g || !opt) return;
         if (e.target !== checkbox) checkbox.checked = !checkbox.checked;
-        if (checkbox.checked) option.classList.add('selected'); else option.classList.remove('selected');
-        const extraId = option.dataset.extraId;
-        const extraOpt = extraGroup.options.find(o => o.id === extraId);
-        if (checkbox.checked && extraOpt) { if (!selectedExtras.some(ee=>ee.id===extraId)) selectedExtras.push(extraOpt); }
-        else { selectedExtras = selectedExtras.filter(ee=> ee.id !== extraId); }
+        if (checkbox.checked) {
+          const cumulative = opt.cumulative !== false;
+          if (!cumulative) {
+            // Exclusivo: substitui qualquer outra seleção do grupo
+            modalContent.querySelectorAll(`.extra-option[data-group-id="${gid}"]`).forEach(o => {
+              if (o === row) return;
+              o.classList.remove('selected');
+              const c = o.querySelector('input'); if (c) c.checked = false;
+            });
+            selectedExtras = selectedExtras.filter(ee => ee.groupId !== gid);
+            if (Number(opt.price || 0) === 0 && g.max_free != null && 1 > g.max_free) {
+              checkbox.checked = false;
+              if (window.showToast) window.showToast(`Este grupo não permite itens grátis.`, 'error');
+              updateModalTotal();
+              return;
+            }
+            row.classList.add('selected');
+            selectedExtras.push({ id: opt.id, name: opt.name, price: Number(opt.price || 0), quantity: 1, groupId: gid, exclusive: true });
+          } else {
+            if (exclusiveInGroup(gid)) {
+              checkbox.checked = false;
+              if (window.showToast) window.showToast(`Este grupo já tem um item exclusivo selecionado.`, 'error');
+              updateModalTotal();
+              return;
+            }
+            if (Number(opt.price || 0) === 0 && g.max_free != null && freeUnitsInGroup(gid) + 1 > g.max_free) {
+              checkbox.checked = false;
+              if (window.showToast) window.showToast(`Limite de ${g.max_free} item(ns) grátis neste grupo.`, 'error');
+              updateModalTotal();
+              return;
+            }
+            if (!selectedExtras.some(ee => ee.groupId === gid && ee.id === oid)) {
+              row.classList.add('selected');
+              selectedExtras.push({ id: opt.id, name: opt.name, price: Number(opt.price || 0), quantity: 1, groupId: gid, exclusive: false });
+              setQtyBadge(gid, oid, 1);
+            }
+          }
+        } else {
+          row.classList.remove('selected');
+          selectedExtras = selectedExtras.filter(ee => !(ee.groupId === gid && ee.id === oid));
+          setQtyBadge(gid, oid, 0);
+        }
+        refreshGroupDisabled(gid);
+        updateModalTotal();
+      });
+    });
+    // Stepper de quantidade (opções cumulativas)
+    modalContent.querySelectorAll('[data-qty-act]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const gid = btn.dataset.qtyGroup, oid = btn.dataset.qtyId;
+        const g = findGroup(gid), opt = findOpt(gid, oid);
+        const entry = selectedExtras.find(ee => ee.groupId === gid && ee.id === oid);
+        if (!g || !opt || !entry) return;
+        let qty = Number(entry.quantity || 1);
+        if (btn.dataset.qtyAct === 'inc') {
+          if (qty >= MAX_EXTRA_QTY) return;
+          if (Number(opt.price || 0) === 0 && g.max_free != null && freeUnitsInGroup(gid) + 1 > g.max_free) {
+            if (window.showToast) window.showToast(`Limite de ${g.max_free} item(ns) grátis neste grupo.`, 'error');
+            return;
+          }
+          qty += 1;
+        } else {
+          if (qty <= 1) return;
+          qty -= 1;
+        }
+        entry.quantity = qty;
+        setQtyBadge(gid, oid, qty);
         updateModalTotal();
       });
     });
@@ -518,7 +656,7 @@ function setupProductModal() {
         let unit = base;
         if (!usePizzaSizes && selectedSize && typeof selectedSize.price_diff === 'number') unit += selectedSize.price_diff;
         if (selectedCrust && selectedCrust.price) unit += Number(selectedCrust.price);
-        if (selectedExtras && selectedExtras.length) selectedExtras.forEach(extra=> unit += Number(extra.price||0));
+        if (selectedExtras && selectedExtras.length) selectedExtras.forEach(extra=> unit += Number(extra.price||0)*Number(extra.quantity||1));
         return unit;
       }
       let base = getPriceForProductSize(product, selectedSize);
@@ -530,7 +668,7 @@ function setupProductModal() {
       let unit = base;
       if (!usePizzaSizes && selectedSize && typeof selectedSize.price_diff === 'number') unit += selectedSize.price_diff;
       if (selectedCrust && selectedCrust.price) unit += Number(selectedCrust.price);
-      if (selectedExtras && selectedExtras.length) selectedExtras.forEach(extra=> unit += Number(extra.price||0));
+      if (selectedExtras && selectedExtras.length) selectedExtras.forEach(extra=> unit += Number(extra.price||0)*Number(extra.quantity||1));
       return unit;
     }
 
@@ -561,6 +699,12 @@ function setupProductModal() {
     const btnAdd = modalContent.querySelector('#btnConfirmAddToCart');
     btnAdd.addEventListener('click', () => {
       if(product.is_pizza&&(!Number.isFinite(getPriceForProductSize(product,selectedSize))||selectedFlavors.some(f=>!Number.isFinite(getPriceForProductSize(f,selectedSize))))){window.showToast?.('Tamanho indisponível para um dos sabores.','error');return;}
+      for (const g of extraGroups) {
+        if (g.type === 'single' && g.required && !selectedExtras.some(ee => ee.groupId === g.id)) {
+          if (window.showToast) window.showToast(`Escolha uma opção em "${g.title}".`, 'error');
+          return;
+        }
+      }
       observation = obsInput ? obsInput.value : '';
       // Fluxo fracionado
       if(selectedFraction && selectedFraction.value < 1){

@@ -30,7 +30,17 @@ Deno.serve(async req=>{
    const minutes=(t:string)=>Number(t.slice(0,2))*60+Number(t.slice(3,5));const start=minutes(s.start_time),end=minutes(s.end_time);
    return end<start?(s.weekday===day&&minute>=start)||((s.weekday+1)%7===day&&minute<=end):s.weekday===day&&minute>=start&&minute<=end;
   })).map((o:any)=>({...o,groups:o.offer_groups}));
-  const snapshot=priceOrder(order,{store,settings:settings||{},products,sizes,prices,neighborhoods,offers:activeOffers,addons:groups.flatMap((g:any)=>g.addon_options.map((a:any)=>({...a,group_name:g.name})))});
+   const groupIds=groups.map((g:any)=>g.id);
+   const {data:links,error:linkError}=groupIds.length?await db.from('addon_group_categories').select('group_id,category_id').in('group_id',groupIds):{data:[],error:null};
+   if(linkError) throw new Error('Não foi possível carregar o catálogo.');
+   const catsByGroup=new Map<string,string[]>();
+   for(const l of (links||[]) as any[]){
+    const arr=catsByGroup.get(l.group_id)||[];
+    arr.push(l.category_id);
+    catsByGroup.set(l.group_id,arr);
+   }
+   const snapshot=priceOrder(order,{store,settings:settings||{},products,sizes,prices,neighborhoods,offers:activeOffers,addons:groups.flatMap((g:any)=>g.addon_options.map((a:any)=>({...a,group_id:g.id,group_name:g.name,group_max_free:g.max_free ?? null,group_category_ids:catsByGroup.get(g.id)||[],cumulative:a.cumulative ?? true})))});
+
   if(Math.abs(snapshot.total-Number(order.total))>0.01) return response({error:'Os preços mudaram. Atualize o cardápio e confira a sacola.'},409);
   const {data,error:saveError}=await db.rpc('place_verified_order',{p_store_id:store_id,p_request_id:request_id,p_snapshot:snapshot});
   if(saveError) throw new Error('Não foi possível registrar o pedido. Aguarde e tente novamente.');

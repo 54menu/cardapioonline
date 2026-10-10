@@ -62,7 +62,41 @@ export function priceOrder(input, catalog) {
   if(raw.crust&&!p.has_crusts) fail('Borda não permitida.');
   if(raw.extras?.length&&!p.has_extras) fail('Adicionais não permitidos.');
   if(!Array.isArray(raw.extras||[])||(raw.extras||[]).length>30||new Set((raw.extras||[]).map(x=>x.id)).size!==(raw.extras||[]).length) fail('Adicionais inválidos.');
-  const crust=addon(raw.crust,'crust');const extras=(raw.extras||[]).map(a=>addon(a,'extra'));
+   const crust=addon(raw.crust,'crust');
+   // Extras: vínculo com a categoria do produto, quantidade (cumulativos),
+   // exclusividade (não cumulativos) e limite de gratuitos por grupo (em unidades).
+   const MAX_EXTRA_QTY=10;
+   const groupState=new Map();
+   const freeUnitsByGroup=new Map();
+   const extras=(raw.extras||[]).map(sel=>{
+    const e=addon(sel,'extra');
+    const src=addons.find(a=>a.id===sel.id);
+    const cats=src.group_category_ids||[];
+    if(cats.length&&!cats.includes(p.category_id)) fail('Adicional inválido para este produto.');
+    const qty=sel.quantity??1;
+    if(!Number.isInteger(qty)||qty<1||qty>MAX_EXTRA_QTY) fail('Quantidade do adicional inválida.');
+    const cumulative=src.cumulative??true;
+    if(!cumulative&&qty>1) fail('Quantidade do adicional inválida.');
+    const key=src.group_id||src.group_name;
+    const st=groupState.get(key)||{distinct:0,exclusive:false};
+    if(!cumulative){
+     if(st.distinct>0) fail('Adicional exclusivo não combina com outros itens.');
+     st.exclusive=true;
+    }else if(st.exclusive) fail('Adicional exclusivo não combina com outros itens.');
+    st.distinct+=1;
+    groupState.set(key,st);
+    const unitCents=money(src.price_diff);
+    e.price=unitCents*qty/100;
+    e.quantity=qty;
+    if(qty>1) unit+=unitCents*(qty-1);
+    const max=src.group_max_free;
+    if(max!==null&&max!==undefined&&unitCents===0){
+     const cur=(freeUnitsByGroup.get(key)||0)+qty;
+     if(cur>max) fail('Limite de itens gratuitos excedido.');
+     freeUnitsByGroup.set(key,cur);
+    }
+    return e;
+   });
   const fraction=raw.fractionValue===undefined?1:raw.fractionValue;
   if(typeof fraction!=='number'||![1,0.5,1/3,0.25].includes(fraction)) fail('Fração inválida.');
   const denominator=Math.round(1/fraction);

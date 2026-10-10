@@ -269,7 +269,24 @@ export const addonGroupsApi = {
       `)
       .eq('store_id', storeId)
       .order('display_order');
-    return { data, error };
+    if (error) return { data, error };
+    // Anexa vínculo grupo<->categorias (tabela nova; ignora se ainda não migrada)
+    try {
+      const ids = (data || []).map(g => g.id);
+      if (ids.length) {
+        const { data: links, error: linkError } = await supabase
+          .from('addon_group_categories')
+          .select('group_id,category_id')
+          .in('group_id', ids);
+        if (!linkError) {
+          const byGroup = {};
+          for (const l of links || []) (byGroup[l.group_id] = byGroup[l.group_id] || []).push(l.category_id);
+          for (const g of data || []) g.category_ids = byGroup[g.id] || [];
+        }
+      }
+    } catch { /* mantém compatibilidade pré-migração */ }
+    for (const g of data || []) if (!g.category_ids) g.category_ids = [];
+    return { data, error: null };
   },
 
   async create(storeId, group) {
@@ -296,6 +313,30 @@ export const addonGroupsApi = {
       .from('addon_groups')
       .delete()
       .eq('id', id);
+    return { error };
+  }
+};
+
+// Vínculo grupo de opcionais <-> categorias (grupo sem vínculo vale para todas)
+export const addonGroupCategoriesApi = {
+  async listByGroups(groupIds) {
+    if (!groupIds?.length) return { data: [], error: null };
+    const { data, error } = await supabase
+      .from('addon_group_categories')
+      .select('group_id,category_id')
+      .in('group_id', groupIds);
+    return { data, error };
+  },
+  async setCategories(groupId, categoryIds) {
+    const { error: delError } = await supabase
+      .from('addon_group_categories')
+      .delete()
+      .eq('group_id', groupId);
+    if (delError) return { error: delError };
+    if (!categoryIds?.length) return { error: null };
+    const { error } = await supabase
+      .from('addon_group_categories')
+      .insert(categoryIds.map(category_id => ({ group_id: groupId, category_id })));
     return { error };
   }
 };

@@ -398,7 +398,7 @@ class StoreState {
       let unitPrice = basePrice;
       if (size && typeof size.price_diff === 'number' && (!this.pizzaSizes || !this.pizzaSizes.length)) unitPrice += size.price_diff;
       if (crust && crust.price) unitPrice += Number(crust.price);
-      if (extras && extras.length) extras.forEach(e=> unitPrice += Number(e.price||0));
+      if (extras && extras.length) extras.forEach(e=> unitPrice += Number(e.price||0)*Number(e.quantity||1));
 
       const sizeShort = size && size.name ? size.name.split('(')[0].trim() : '';
       const displayName = `${label} ${product.name.replace('Pizza ','')}` + (sizeShort ? ` [${sizeShort}]` : '');
@@ -417,7 +417,7 @@ class StoreState {
         fractionValue: fv,
         fractionLabel: label,
         crust: crust ? { id: crust.id, name: crust.name, price: Number(crust.price || 0) } : null,
-        extras: extras.map(e => ({ id: e.id, name: e.name, price: Number(e.price || 0) })),
+        extras: extras.map(e => ({ id: e.id, name: e.name, price: Number(e.price || 0)*Number(e.quantity||1), quantity: Number(e.quantity||1), groupId: e.groupId || null })),
         observation: observation.trim(),
         itemTotal: unitPrice * quantity * fv // temporário proporcional para exibição; subtotal real é recalc via _computeFractionalSubtotal
       };
@@ -461,7 +461,7 @@ class StoreState {
     }
     if (extras && extras.length > 0) {
       extras.forEach(extra => {
-        unitPrice += Number(extra.price || 0);
+        unitPrice += Number(extra.price || 0)*Number(extra.quantity||1);
       });
     }
 
@@ -481,7 +481,7 @@ class StoreState {
       fractionValue: 1,
       fractionLabel: 'Inteira',
       crust: crust ? { id: crust.id, name: crust.name, price: Number(crust.price || 0) } : null,
-      extras: extras.map(e => ({ id: e.id, name: e.name, price: Number(e.price || 0) })),
+      extras: extras.map(e => ({ id: e.id, name: e.name, price: Number(e.price || 0)*Number(e.quantity||1), quantity: Number(e.quantity||1), groupId: e.groupId || null })),
       observation: observation.trim(),
       itemTotal
     };

@@ -42,7 +42,8 @@ const whatsappService = {
         if (item.extras && item.extras.length > 0) {
           lines.push(`   - Extras:`);
           item.extras.forEach(e => {
-            lines.push(`     • ${e.name} (+ ${cs ? cs.formatCurrency(e.price) : 'R$ ' + e.price})`);
+            const qty = Number(e.quantity||1) > 1 ? `${e.quantity}x ` : '';
+            lines.push(`     • ${qty}${e.name} (+ ${cs ? cs.formatCurrency(e.price) : 'R$ ' + e.price})`);
           });
         }
       }

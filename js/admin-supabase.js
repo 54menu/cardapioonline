@@ -6,7 +6,7 @@ import {subscriptionSummary} from './lib/subscription-summary.js';
  * Cadastro público e convites opcionais
  */
 
-import { supabase, auth, storeApi, categoriesApi, productsApi, addonGroupsApi, addonOptionsApi, neighborhoodsApi, ordersApi, settingsApi, storageApi, invitesApi, profilesApi, pizzaSizesApi, productSizePricesApi, subscriptionsApi, paymentsApi, offersApi, offerGroupsApi, offerGroupItemsApi, offerSchedulesApi, campaignsApi } from './lib/supabase.js?v=20261005-registration';
+import { supabase, auth, storeApi, categoriesApi, productsApi, addonGroupsApi, addonGroupCategoriesApi, addonOptionsApi, neighborhoodsApi, ordersApi, settingsApi, storageApi, invitesApi, profilesApi, pizzaSizesApi, productSizePricesApi, subscriptionsApi, paymentsApi, offersApi, offerGroupsApi, offerGroupItemsApi, offerSchedulesApi, campaignsApi } from './lib/supabase.js?v=20261005-registration';
 import storage from './state/storage-supabase.js?v=20260930';
 
 // Expose para compatibilidade global
@@ -1958,7 +1958,11 @@ async function renderAddons() {
     container.innerHTML = window.safeHTML(`<p style="color: var(--text-muted);">Crie sua loja primeiro.</p>`);
     return;
   }
-  const { data, error } = await addonGroupsApi.list(currentStoreId);
+  const [{ data, error }, { data: allCats }] = await Promise.all([
+    addonGroupsApi.list(currentStoreId),
+    categoriesApi.list(currentStoreId).catch(() => ({ data: [] }))
+  ]);
+  const catName = Object.fromEntries((allCats || []).map(c => [c.id, c.name]));
   if (error) {
     container.innerHTML = window.safeHTML(`<p style="color: var(--status-closed);">Erro: ${error.message}</p>`);
     return;
@@ -1979,7 +1983,7 @@ async function renderAddons() {
         <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem;">
           <div>
             <div style="font-weight:800;">${group.title || group.name} <span style="font-weight:400; font-size:0.75rem; color:var(--text-muted);">(${group.type === 'single' ? 'única' : 'múltipla'}${group.required ? ' • obrigatório' : ''})</span></div>
-            <div style="font-size:0.75rem; color:var(--text-muted);">nome: ${group.name} • ordem: ${group.display_order} ${group.applies_to?.length ? '• aplica: ' + group.applies_to.join(',') : ''}</div>
+            <div style="font-size:0.75rem; color:var(--text-muted);">nome: ${group.name} • ordem: ${group.display_order} ${group.applies_to?.length ? '• aplica: ' + group.applies_to.join(',') : ''}${group.max_free != null ? ` • máx ${group.max_free} grátis` : ''}${group.category_ids?.length ? ` • categorias: ${group.category_ids.map(id => catName[id] || '…').join(', ')}` : ''}</div>
           </div>
           <div style="display:flex; gap:0.4rem; flex-shrink:0;">
             <button class="btn btn-secondary btn-sm btn-edit-addon-group" data-id="${group.id}">✏️</button>
@@ -1993,7 +1997,7 @@ async function renderAddons() {
                 <div style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-md); padding:0.5rem 0.75rem;">
                   <div>
                     <span style="font-weight:600; font-size:0.88rem;">${o.name}</span>
-                    <span style="font-size:0.75rem; color:var(--text-muted); margin-left:0.4rem;">${o.is_default ? '⭐ padrão' : ''} ${o.allows_half_half ? '• meio a meio' : ''}</span>
+                    <span style="font-size:0.75rem; color:var(--text-muted); margin-left:0.4rem;">${o.is_default ? '⭐ padrão' : ''} ${o.allows_half_half ? '• meio a meio' : ''} ${o.cumulative === false ? '• exclusivo' : ''}</span>
                   </div>
                   <div style="display:flex; align-items:center; gap:0.5rem;">
                     <span style="font-weight:700; font-size:0.85rem; color:var(--primary);">${o.price_diff>0?'+ ':''}${formatCurrency(o.price_diff)}</span>
@@ -2021,13 +2025,27 @@ function openAddonGroupModal(groupId=null){
   const modal=document.getElementById('addonGroupModalBackdrop');
   const title=document.getElementById('addonGroupModalTitle');
   document.getElementById('addonGroupEditId').value=groupId||'';
+  const fillCategories=(cats, selected=[])=>{
+    const box=document.getElementById('addonGroupCategoriesBox');
+    box.innerHTML=window.safeHTML((cats||[]).map(c=>
+      `<label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-size:0.88rem;">
+        <input type="checkbox" class="addonGroupCatCheck" value="${c.id}" ${selected.includes(c.id)?'checked':''} style="width:auto;" />
+        ${c.name}
+      </label>`).join('') || '<span style="font-size:0.85rem; color:var(--text-muted);">Nenhuma categoria cadastrada.</span>');
+  };
+  categoriesApi.list(currentStoreId).catch(()=>({data:[]})).then(({data:cats})=>{
+    if(!groupId) fillCategories(cats||[]);
+  });
   if(!groupId){
     title.textContent='Novo Grupo';
     document.getElementById('addonGroupForm').reset();
     document.getElementById('addonGroupOrderInput').value='1';
   } else {
     title.textContent='Editar Grupo';
-    addonGroupsApi.list(currentStoreId).then(({data})=>{
+    Promise.all([
+      addonGroupsApi.list(currentStoreId),
+      categoriesApi.list(currentStoreId).catch(()=>({data:[]}))
+    ]).then(([{data},{data:cats}])=>{
       const g=data?.find(x=>x.id===groupId);
       if(!g) return;
       document.getElementById('addonGroupTitleInput').value=g.title||'';
@@ -2036,6 +2054,8 @@ function openAddonGroupModal(groupId=null){
       document.getElementById('addonGroupRequiredInput').checked=!!g.required;
       document.getElementById('addonGroupOrderInput').value=g.display_order||1;
       document.getElementById('addonGroupAppliesInput').value=(g.applies_to||[]).join(', ');
+      document.getElementById('addonGroupMaxFreeInput').value=(g.max_free ?? '');
+      fillCategories(cats||[], g.category_ids||[]);
     });
   }
   modal.classList.add('active');
@@ -2069,6 +2089,7 @@ async function openAddonOptionModal(groupId, optionId=null){
     document.getElementById('addonOptionOrderInput').value=o.display_order||1;
     document.getElementById('addonOptionDefaultInput').checked=!!o.is_default;
     document.getElementById('addonOptionHalfInput').checked=!!o.allows_half_half;
+    document.getElementById('addonOptionCumulativeInput').checked=o.cumulative ?? true;
   }
   modal.classList.add('active');
 }
@@ -2087,18 +2108,31 @@ document.getElementById('btnCancelAddonGroup').addEventListener('click', closeAd
 document.getElementById('addonGroupForm').addEventListener('submit', async (e)=>{
   e.preventDefault();
   const id=document.getElementById('addonGroupEditId').value;
+  const maxFreeRaw=document.getElementById('addonGroupMaxFreeInput').value;
   const payload={
     title: document.getElementById('addonGroupTitleInput').value.trim(),
     name: document.getElementById('addonGroupNameInput').value.trim().toLowerCase().replace(/\s+/g,'_') || document.getElementById('addonGroupTitleInput').value.trim().toLowerCase().replace(/\s+/g,'_'),
     type: document.getElementById('addonGroupTypeInput').value,
     required: document.getElementById('addonGroupRequiredInput').checked,
     display_order: Number(document.getElementById('addonGroupOrderInput').value)||1,
-    applies_to: document.getElementById('addonGroupAppliesInput').value.split(',').map(s=>s.trim()).filter(Boolean)
+    applies_to: document.getElementById('addonGroupAppliesInput').value.split(',').map(s=>s.trim()).filter(Boolean),
+    max_free: maxFreeRaw==='' ? null : Math.max(0, parseInt(maxFreeRaw,10)||0)
   };
   showLoading(true);
   let error;
+  let savedId=id;
   if(id){ const r=await addonGroupsApi.update(id,payload); error=r.error; }
-  else { const r=await addonGroupsApi.create(currentStoreId,payload); error=r.error; }
+  else { const r=await addonGroupsApi.create(currentStoreId,payload); error=r.error; if(!error) savedId=r.data?.id; }
+  if(!error && savedId){
+    const catIds=[...document.querySelectorAll('.addonGroupCatCheck:checked')].map(c=>c.value);
+    if(catIds.length){
+      const {error:catError}=await addonGroupCategoriesApi.setCategories(savedId,catIds);
+      if(catError) error=catError;
+    } else if(id){
+      // Limpa vínculos (tabela pode ainda não existir pré-migração: ignora)
+      try{ await addonGroupCategoriesApi.setCategories(savedId,[]); }catch{ /* noop */ }
+    }
+  }
   showLoading(false);
   if(error) showToast(error.message,'error');
   else { closeAddonGroupModal(); showToast('✅ Grupo salvo!','success'); renderAddons(); }
@@ -2115,7 +2149,8 @@ document.getElementById('addonOptionForm').addEventListener('submit', async (e)=
     price_diff: parseCurrency(document.getElementById('addonOptionPriceInput').value)||0,
     display_order: Number(document.getElementById('addonOptionOrderInput').value)||1,
     is_default: document.getElementById('addonOptionDefaultInput').checked,
-    allows_half_half: document.getElementById('addonOptionHalfInput').checked
+    allows_half_half: document.getElementById('addonOptionHalfInput').checked,
+    cumulative: document.getElementById('addonOptionCumulativeInput').checked
   };
   showLoading(true);
   let error;

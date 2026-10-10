@@ -89,7 +89,7 @@ class SupabaseStorageEngine {
       if (!addonsResult.data || addonsResult.data.length === 0) {
         this._dataCache.addonGroups = {};
       } else {
-        const mapped = {};
+        const mapped = { extraGroups: [], crustGroups: [] };
         for (const g of addonsResult.data) {
           const opts = (g.addon_options || []).map(o => ({
             id: o.id,
@@ -98,17 +98,23 @@ class SupabaseStorageEngine {
             price_diff: Number(o.price_diff ?? o.price ?? 0),
             allows_half_half: o.allows_half_half,
             is_default: o.is_default,
-            default: o.is_default
+            default: o.is_default,
+            cumulative: o.cumulative ?? true
           }));
           const nameKey = (g.name + ' ' + (g.title||'')).toLowerCase();
-          let key = g.id;
-          if (nameKey.includes('tamanho')) key = 'sizes';
-          else if (nameKey.includes('borda') || nameKey.includes('crust')) key = 'crusts';
-          else if (nameKey.includes('extra') || nameKey.includes('adicional')) key = 'extras';
-          const entry = { id: g.id, title: g.title || g.name, name: g.name, type: g.type, required: g.required, options: opts };
-          mapped[key] = entry;
+          let kind = null;
+          if (nameKey.includes('tamanho')) kind = 'sizes';
+          else if (nameKey.includes('borda') || nameKey.includes('crust')) kind = 'crusts';
+          else if (nameKey.includes('extra') || nameKey.includes('adicional')) kind = 'extras';
+          const entry = { id: g.id, title: g.title || g.name, name: g.name, type: g.type, required: g.required, max_free: g.max_free ?? null, category_ids: g.category_ids || [], options: opts, kind };
           mapped[g.id] = entry;
+          if (kind === 'extras') mapped.extraGroups.push(entry);
+          else if (kind === 'crusts') mapped.crustGroups.push(entry);
+          else if (kind === 'sizes') mapped.sizes = entry;
         }
+        // Compat: primeira de cada tipo nas chaves legadas
+        if (mapped.extraGroups.length && !mapped.extras) mapped.extras = mapped.extraGroups[0];
+        if (mapped.crustGroups.length && !mapped.crusts) mapped.crusts = mapped.crustGroups[0];
         this._dataCache.addonGroups = mapped;
       }
       this._dataCache.neighborhoods = (neighborhoodsResult.data || []).map(n=>({...n,fee:Number(n.delivery_fee)}));
